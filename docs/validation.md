@@ -59,7 +59,7 @@ input. Product source and public fixtures contain no machine-local journal path.
 | Same-cache standard smoke | Two attempts timed out at the wrapper's 30 s limit; the retry retained a renderer-startup trace. This is an unresolved host gate. |
 | Same-cache plugin smoke | Direct Debug plugin startup exited 0 within a 30 s bound; exact elapsed time was not retained. |
 | Final Release build/startup | Passed, 98 Ninja steps, 130.54 s combined configure/build/startup. The command loaded the flashcard plugin and exited 0. Phase timings were not separated. |
-| Remote CI / macOS | Not run; no repository has been published yet. |
+| Remote CI / macOS | Not run during local validation; publication does not establish those results. |
 
 Repeated validation was diagnostic: the first full selection exposed a new
 capture-input readiness failure, fixed before the recorded 57/59 run. A later
@@ -87,6 +87,11 @@ Steps 1–2 are covered by Windows packaged automation and inspected captures.
 Missing-image behavior is covered by the model; interactive resizing, multi-pane
 use and macOS input/render review remain useful human checks, not claimed results.
 
-Publication and initial commits still require the requested approval. The local
-product card remains pending until its unresolved gates are addressed or explicitly
-transferred to their existing owners.
+The user authorized committing and pushing the full checkout on 2026-10-01.
+The public [draxul-flashcards repository](https://github.com/cmaughan/draxul-flashcards)
+contains source, public fixtures and licensed assets; the initial implementation
+commit is `f826a3c`. Draxul registers it at `plugins/flashcards` as a Git submodule.
+No personal generated deck, module, binary or capture was published.
+
+The completed product card records explicit transfer of unresolved host validation
+to the existing Draxul cards. These remain failures, rather than passing checks.

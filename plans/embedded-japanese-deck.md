@@ -1,6 +1,6 @@
 # Embedded Japanese flashcards: first vertical slice
 
-Product: `dev.draxul.flashcards`, proposed public repository `cmaughan/draxul-flashcards`.
+Product: `dev.draxul.flashcards`, public repository [cmaughan/draxul-flashcards](https://github.com/cmaughan/draxul-flashcards).
 Mount: `plugins/flashcards`, controlled by `DRAXUL_ENABLE_FLASHCARDS`.
 
 ## Outcome
