@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "assets": {
+    "speech": {"file": "speech.png", "source": "https://raw.githubusercontent.com/jdecked/twemoji/v17.0.2/assets/72x72/1f4ac.png", "license": "CC-BY-4.0", "attribution": "Twemoji / Twitter and contributors - CC BY 4.0", "changes": "None"},
+    "robot": {"file": "robot.png", "source": "https://raw.githubusercontent.com/jdecked/twemoji/v17.0.2/assets/72x72/1f916.png", "license": "CC-BY-4.0", "attribution": "Twemoji / Twitter and contributors - CC BY 4.0", "changes": "None"},
+    "apple": {"file": "apple.png", "source": "https://raw.githubusercontent.com/jdecked/twemoji/v17.0.2/assets/72x72/1f34e.png", "license": "CC-BY-4.0", "attribution": "Twemoji / Twitter and contributors - CC BY 4.0", "changes": "None"}
+  },
+  "by_kana": {"ことば": "speech", "エージェント": "robot", "りんご": "apple", "ロボット": "robot"},
+  "by_id": {}
+}

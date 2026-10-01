@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "words": [
+    {"id": "fixture-apple", "kana": "りんご", "meaning": "apple", "romaji": "ringo"},
+    {"id": "fixture-robot", "kana": "ロボット", "meaning": "robot", "romaji": "robotto"}
+  ]
+}
