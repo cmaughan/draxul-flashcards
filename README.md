@@ -6,6 +6,13 @@ kana on the front; production shows only a picture association. Both backs show
 the picture, kana, romanization and cached pronunciation. English translations
 and conversational journal details are never embedded.
 
+## Launch
+
+Use `draxul --plugin dev.draxul.flashcards`, or the Flashcards new-tab entry in
+Draxul's command palette. The manifest opts into `reuse_existing_tab`: repeated
+tab launches focus the existing Flashcards tab with matching JSON configuration
+in the same Session, even across Spaces. Explicit splits remain separate.
+
 ## Build source
 
 `DRAXUL_ENABLE_FLASHCARDS` enables the mounted product; it defaults to ON.
