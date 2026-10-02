@@ -3,6 +3,7 @@ id = "dev.draxul.flashcards"
 name = "Flashcards"
 version = "0.1.0"
 abi_version = 2
+reuse_existing_tab = true
 
 [platform.windows]
 library = "draxul-flashcards.dll"
