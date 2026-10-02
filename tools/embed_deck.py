@@ -72,17 +72,20 @@ def build_deck(source, artwork):
     if not isinstance(words, list) or len(words) > MAX_WORDS:
         raise ValueError("words must be an array of at most 2000 entries")
     art = read_json(artwork)
-    if not isinstance(art, dict) or art.get("schema_version") != 1 or art.keys() != {"schema_version", "assets", "by_kana", "by_id"}:
+    if not isinstance(art, dict) or art.get("schema_version") != 2 or art.keys() != {"schema_version", "assets", "audio", "by_kana", "by_id", "audio_by_kana"}:
         raise ValueError("unsupported artwork schema")
-    if not all(isinstance(art[k], dict) for k in ("assets", "by_kana", "by_id")):
+    if not all(isinstance(art[k], dict) for k in ("assets", "audio", "by_kana", "by_id", "audio_by_kana")):
         raise ValueError("invalid artwork mappings")
-    for asset in art["assets"].values():
+    for asset in list(art["assets"].values()) + list(art["audio"].values()):
         if not isinstance(asset, dict) or asset.keys() != {"file", "source", "license", "attribution", "changes"}:
             raise ValueError("invalid artwork metadata")
         for field in asset:
             text_field(asset, field, 512, True)
-        if not re.fullmatch(r"[a-z0-9_-]+\.png", asset["file"]) or not asset["source"].startswith("https://") or asset["license"] not in {"CC-BY-4.0", "CC0-1.0"}:
-            raise ValueError("artwork needs a vetted PNG, source and supported bundling license")
+        if not re.fullmatch(r"[a-z0-9_-]+\.(png|jpg|jpeg|wav)", asset["file"]) or not asset["source"].startswith("https://") or asset["license"] not in {"CC-BY-4.0", "CC-BY-SA-4.0", "CC0-1.0", "CC-BY-3.0"}:
+            raise ValueError("media needs a vetted file, source and supported bundling license")
+    for mapping, assets in ((art["audio_by_kana"], art["audio"]),):
+        if any(not isinstance(key, str) or not isinstance(val, str) or val not in assets for key, val in mapping.items()):
+            raise ValueError("audio mapping refers to an unknown asset")
     for mapping in (art["by_id"], art["by_kana"]):
         if any(not isinstance(key, str) or not isinstance(val, str) or val not in art["assets"] for key, val in mapping.items()):
             raise ValueError("artwork mapping refers to an unknown asset")
@@ -103,9 +106,11 @@ def build_deck(source, artwork):
         romaji = text_field(word, "romaji", 256)
         asset_id = art["by_id"].get(word_id, art["by_kana"].get(kana, ""))
         asset = art["assets"].get(asset_id, {})
+        audio = art["audio"].get(art["audio_by_kana"].get(kana, ""), {})
         cards.append({"id": word_id, "kana": kana, "romaji": romaji,
-                      "image": asset.get("file", ""), "attribution": asset.get("attribution", "")})
-    return {"schema_version": 1, "kind": "recognition", "cards": sorted(cards, key=lambda c: c["id"])}
+                      "image": asset.get("file", ""), "attribution": asset.get("attribution", ""),
+                      "audio": audio.get("file", ""), "audio_attribution": audio.get("attribution", "")})
+    return {"schema_version": 2, "kind": "bidirectional", "cards": sorted(cards, key=lambda c: c["id"])}
 
 
 def generate(source, artwork, output):

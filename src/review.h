@@ -11,9 +11,12 @@
 
 namespace flashcards
 {
+enum class Direction { Recognition, Production };
 struct Card
 {
     std::string id, kana, romaji, image, attribution;
+    std::string audio, audio_attribution;
+    Direction direction = Direction::Recognition;
 };
 
 struct Progress
@@ -44,12 +47,10 @@ public:
     void refresh();
     void start_batch();
     bool flip();
-    bool show_hint();
     bool grade(bool remembered);
     void skip();
     const Card* current() const;
     bool revealed() const { return revealed_; }
-    bool hinted() const { return hinted_; }
     bool blocked() const { return blocked_; }
     const std::string& error() const { return error_; }
     size_t due_count() const;
@@ -70,7 +71,7 @@ private:
     std::optional<size_t> current_;
     int expected_reviews_ = 0;
     int batch_grades_ = 0;
-    bool revealed_ = false, hinted_ = false, blocked_ = false, image_ready_ = false;
+    bool revealed_ = false, blocked_ = false, image_ready_ = false;
     std::string error_;
     std::vector<std::string> skipped_;
 };

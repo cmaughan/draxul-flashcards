@@ -37,7 +37,10 @@ class GeneratorBoundary(unittest.TestCase):
         payload = json.dumps(deck, ensure_ascii=False)
         for private in ("PRIVATE_CONTEXT", "PRIVATE_TIME", "PRIVATE_GUIDE", "meaning", str(self.root)):
             self.assertNotIn(private, payload)
-        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution"})
+        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution", "audio", "audio_attribution"})
+        self.assertEqual(deck["schema_version"], 2)
+        self.assertEqual(deck["kind"], "bidirectional")
+        self.assertTrue(all(c["audio"].endswith(".wav") for c in deck["cards"]))
         self.assertEqual({c["kana"] for c in deck["cards"]}, {"りんご", "ロボット"})
         self.assertTrue(embed.generate(self.source, self.art, self.output))
         stamp = self.output.stat().st_mtime_ns

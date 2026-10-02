@@ -19,7 +19,7 @@ product. Never upload personal generated headers, modules, captures or binaries.
 ## Automated boundaries
 
 The model suite uses deterministic clocks and injected persistent storage to
-exercise explicit grading, all intervals, hint penalties, retry scheduling,
+exercise explicit grading, all intervals, independent directions, retry scheduling,
 reopen/deck additions/removals, save failures, corrupt state, stale overlapping
 panes, writer exclusion, missing images and the 20-grade batch limit.
 
@@ -29,8 +29,8 @@ without reconfiguration, unchanged output timestamps, read-only source handling,
 private-field exclusion, duplicate/schema/bounds/conflict failures and kana
 preservation.
 
-The runtime suite loads the actual packaged module and captures the front/back,
-keyboard Remembered, mouse Forgot, reopened schedule, completion and corrupt-state
+The runtime suite loads the actual packaged module and captures front/turn/back,
+recognition and production, keyboard Remembered, mouse Again, reopened schedule and corrupt-state
 screens. Its Windows lifecycle checks require at least two image-backed cards;
 the public fixture supplies them. It isolates child APPDATA/LOCALAPPDATA, targets
 the exact child SDL window and checks the actual SDK state file. For mouse input
@@ -38,6 +38,11 @@ it briefly positions the pointer inside that window, restoring it if the user
 has not moved it. It does not click unrelated windows. Captures stay in the ignored
 host build tree. The compiled deck follows the selected build source, so personal
 captures are also private.
+
+It verifies no front or mid-turn audio/grades, queues pronunciation on reveal and
+replay through SDL's dummy audio driver, and checks that production grades leave
+recognition records unchanged. Audio queue success does not prove audible output
+or assess pronunciation quality.
 
 The non-Windows runtime harness currently verifies the rendered front; native
 keyboard/mouse automation is Windows-only. Shared model/generator tests run on
@@ -77,8 +82,9 @@ Existing host follow-ups remain in Draxul's `kanban/pending/`:
 ## Interactive review
 
 1. Launch with the public fixture or your configured journal. Verify kana-only
-   front, image hint, flip, kana/romanization back and visible attribution.
-2. Grade using keyboard and mouse; reopen and rebuild to check retained due dates.
+   recognition and picture-only production fronts, animated flip, picture/kana/
+   romanization back, replay and visible attribution. Listen to the synthetic audio.
+2. Grade using keyboard and mouse; reopen and rebuild to check retained independent due dates.
    Opening/flipping should not alter grade counters.
 3. Use an ID without mapped artwork: flip, verify grading is unavailable, then Skip.
 4. Resize/switch panes, check focus and controls, and repeat on macOS/Metal.
@@ -95,3 +101,42 @@ No personal generated deck, module, binary or capture was published.
 
 The completed product card records explicit transfer of unresolved host validation
 to the existing Draxul cards. These remain failures, rather than passing checks.
+
+## Bidirectional/audio slice, 2026-10-02
+
+Each word now has separate recognition and production schedules. Front-side audio,
+hints and grades are blocked; reveal completes the animation before pronunciation
+or grades become available. Recognition history is retained. Reusable photographs
+and 618px OpenMoji assets replace low-resolution icons; five licensed Mei WAVs are
+cached, explicitly labeled synthetic, and have no normal-build/runtime network
+dependency. The user confirmed the rotation and requested centered button labels
+and a clearer morning cue. Inspected final captures show middle-aligned button
+labels and a waking-in-bed photograph beside daylight and a 07:00 alarm.
+
+| Gate | Result and measured cost |
+|---|---|
+| Initial Debug configure/build | Failed on a log-level enum typo; 93.32 s combined, 15 Ninja steps. Corrected before validation. Configure/build phase times were not separated. |
+| Core + Flashcards aggregate | Build passed in 16.94 s; 57/59 CTest entries passed in 77.98 s. All three product entries passed. The same two core baseline failures from the first slice remained. |
+| Product iteration | 281 Ninja steps, 65.76 s build, then 2/3 tests passed in 43.03 s. The mouse capture exposed an input/reveal timing race under concurrent host compilation. |
+| Final product aggregate after review tweaks | 12 Ninja steps, 28.66 s build; 3/3 tests passed in 78.62 s (model 0.22 s, generator 2.96 s, runtime 78.40 s, with overlap). No reconfigure. |
+| Standard same-cache smoke | Timed out at the wrapper's 30 s bound; retained log. Existing host gate remains unresolved. |
+| Same-cache plugin startup | Passed, exit 0 in 26.25 s with the user's restored space. An isolated-data repeat passed in 4.53 s and verified the product alone; it did not replace or rewrite user state. |
+| Initial Release startup | Passed; 10 Ninja steps, 21.92 s build, no reconfigure; startup exited 0, its elapsed time was not separately recorded. Repeated only after the user requested presentation changes. |
+| Final Release startup after review tweaks | Passed; 10 Ninja steps, 22.84 s build, no reconfigure; startup exited 0, its elapsed time was not separately recorded. |
+| macOS / auditory quality | macOS execution unavailable. SDL dummy-driver automation establishes queuing/replay, not audible output or pronunciation quality. The user reported hearing app playback; no user pronunciation/recall assessment was inferred. |
+
+The final harness waits for the host's actual reveal-completion diagnostic rather
+than treating a posted key and fixed delay as proof. It uses a longer capture
+window to allow input processing under load. Captures and generated personal decks
+remain in ignored build trees; none are part of the published source.
+
+Core validation was not repeated by this slice after edits limited to presentation
+and the product harness. Other chats were concurrently editing/testing core and
+two other products in the shared checkout; the runner's lease prevented overlapping
+build mutations. Two product commands were rejected while those builds owned the
+cache. Only this product and its Draxul docs/pointer are included in this publication.
+
+Unresolved host gates are explicitly transferred to the existing Draxul cards
+`63 joined-family-emoji-fallback -bug.md`, `64 windows-test-scope-selection -bug.md`
+and `65 windows-validation-timing -test.md`. No platform gate is reported as passed
+without execution, and no render references were blessed.

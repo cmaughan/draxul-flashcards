@@ -55,22 +55,28 @@ int64_t unix_now()
 std::vector<Card> parse_deck(std::string_view text)
 {
     const auto doc = bounded_json(text);
-    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 1) != 1
-        || doc.at("kind") != "recognition" || !doc.at("cards").is_array() || doc.at("cards").size() > 2000)
+    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 2) != 2
+        || doc.at("kind") != "bidirectional" || !doc.at("cards").is_array() || doc.at("cards").size() > 2000)
         throw std::runtime_error("Unsupported embedded deck");
     std::vector<Card> cards;
     std::set<std::string> ids;
     for (const auto& value : doc.at("cards"))
     {
-        if (!value.is_object() || value.size() != 5)
+        if (!value.is_object() || value.size() != 7)
             throw std::runtime_error("Invalid embedded card");
         Card card{ value.at("id").get<std::string>(), value.at("kana").get<std::string>(),
             value.at("romaji").get<std::string>(), value.at("image").get<std::string>(),
-            value.at("attribution").get<std::string>() };
+            value.at("attribution").get<std::string>(), value.at("audio").get<std::string>(),
+            value.at("audio_attribution").get<std::string>() };
         if (!valid_id(card.id) || !ids.insert(card.id).second || card.kana.empty()
             || card.kana.size() > 192 || card.romaji.size() > 256 || card.attribution.size() > 512
-            || (!card.image.empty() && !std::regex_match(card.image, std::regex("[a-z0-9_-]+\\.png"))))
+            || card.audio_attribution.size() > 512
+            || (!card.image.empty() && !std::regex_match(card.image, std::regex("[a-z0-9_-]+\\.(png|jpg|jpeg)")))
+            || (!card.audio.empty() && !std::regex_match(card.audio, std::regex("[a-z0-9_-]+\\.wav"))))
             throw std::runtime_error("Invalid embedded card fields");
+        cards.push_back(std::move(card));
+        card = cards.back();
+        card.direction = Direction::Production;
         cards.push_back(std::move(card));
     }
     return cards;
@@ -85,7 +91,9 @@ State parse_state(std::string_view text)
     State result;
     for (const auto& [id, value] : doc.at("cards").items())
     {
-        if (!id.starts_with("recognition:") || !valid_id(id.substr(12)) || !value.is_object() || value.size() != 7)
+        const auto colon = id.find(':');
+        if (colon == std::string::npos || (id.substr(0, colon) != "recognition" && id.substr(0, colon) != "production")
+            || !valid_id(id.substr(colon + 1)) || !value.is_object() || value.size() != 7)
             throw std::runtime_error("Invalid review record");
         Progress p;
         p.stage = static_cast<int>(integer(value, "stage", 5));
@@ -119,7 +127,10 @@ ReviewSession::ReviewSession(std::vector<Card> cards, Read read, Save save, Cloc
 {
     refresh();
 }
-std::string ReviewSession::key(const Card& card) const { return "recognition:" + card.id; }
+std::string ReviewSession::key(const Card& card) const
+{
+    return (card.direction == Direction::Recognition ? "recognition:" : "production:") + card.id;
+}
 const Card* ReviewSession::current() const { return current_ ? &cards_[*current_] : nullptr; }
 
 void ReviewSession::refresh()
@@ -144,13 +155,13 @@ void ReviewSession::refresh()
 void ReviewSession::select()
 {
     current_.reset();
-    revealed_ = hinted_ = image_ready_ = false;
+    revealed_ = image_ready_ = false;
     if (batch_finished())
         return;
     int64_t earliest = max_time;
     for (size_t i = 0; i < cards_.size(); ++i)
     {
-        if (std::find(skipped_.begin(), skipped_.end(), cards_[i].id) != skipped_.end())
+        if (std::find(skipped_.begin(), skipped_.end(), key(cards_[i])) != skipped_.end())
             continue;
         const auto entry = state_.find(key(cards_[i]));
         const auto due = entry == state_.end() ? 0 : entry->second.due;
@@ -169,17 +180,10 @@ bool ReviewSession::flip()
     revealed_ = true;
     return true;
 }
-bool ReviewSession::show_hint()
-{
-    if (!current() || revealed_ || hinted_ || blocked_)
-        return false;
-    hinted_ = true;
-    return true;
-}
 void ReviewSession::skip()
 {
     if (const auto* card = current())
-        skipped_.push_back(card->id);
+        skipped_.push_back(key(*card));
     select();
 }
 void ReviewSession::start_batch()
@@ -216,11 +220,6 @@ bool ReviewSession::grade(bool remembered)
         {
             ++p.forgotten;
             p.stage = 0;
-            p.due = now + 600;
-        }
-        else if (hinted_)
-        {
-            ++p.assisted;
             p.due = now + 600;
         }
         else

@@ -60,11 +60,14 @@ def find_window(pid):
     raise RuntimeError("Child SDL window did not appear")
 
 
-def capture(exe, out, name, env, keys=()):
+def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=True):
     path = out / (name + ".bmp")
-    process = subprocess.Popen([str(exe), "--plugin", "dev.draxul.flashcards",
+    command = [str(exe), "--plugin", "dev.draxul.flashcards",
         "--screenshot", str(path), "--screenshot-size", "900x760",
-        "--screenshot-delay", "3500", "--log-file", str(out / (name + ".log"))],
+        "--screenshot-delay", str(delay), "--log-file", str(out / (name + ".log"))]
+    if config is not None:
+        command += ["--plugin-config", json.dumps(config)]
+    process = subprocess.Popen(command,
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         if keys and sys.platform == "win32":
@@ -112,6 +115,21 @@ def capture(exe, out, name, env, keys=()):
                 time.sleep(0.12)
                 user.PostMessageW(hwnd, 0x101, key, 1 | (scan << 16) | (1 << 30) | (1 << 31))
                 time.sleep(0.12)
+                if key == 32 and settle_flip:
+                    # A posted key and a wall-clock delay do not establish that
+                    # the host processed the event or finished its animation.
+                    # Wait for the actual reveal before issuing a grade/replay.
+                    for _ in range(80):
+                        contents = log.read_text(errors="replace")
+                        if "Flashcards reveal complete" in contents:
+                            break
+                        if "action flip revealed=0 image=0" in contents:
+                            break # Empty/corrupt state has no card to reveal.
+                        if process.poll() is not None:
+                            raise RuntimeError("Host exited before reveal completed")
+                        time.sleep(0.05)
+                    else:
+                        raise RuntimeError("Host did not finish its card reveal")
         process.wait(timeout=20)
         if process.returncode:
             raise RuntimeError("Host failed; inspect the retained " + name + ".log")
@@ -133,13 +151,26 @@ def main():
         if sys.platform == "win32":
             env["APPDATA"] = temporary
             env["LOCALAPPDATA"] = temporary
-        front = capture(args.exe, args.out, "front", env)
+        env["SDL_AUDIODRIVER"] = "dummy" # Queue verification without test noise.
+        front = capture(args.exe, args.out, "front", env, [ord("R"), ord("H"), ord("2")])
         if len(set(front)) < 32:
             raise RuntimeError("Host is blank")
         if sys.platform != "win32":
             print("Front rendered; native keyboard lifecycle requires Windows in this harness.")
             return
-        back = capture(args.exe, args.out, "back", env, [32])
+        def queued(name):
+            return (args.out / (name + ".log")).read_text(errors="replace").count("pronunciation queued after reveal")
+        if queued("front") or list(Path(temporary).rglob("recall-v1.json")):
+            raise RuntimeError("Front input leaked pronunciation or invented a grade")
+        middle = capture(args.exe, args.out, "midflip", env, [32, ord("2"), ord("R")],
+                         delay=1100, config={"flip_duration_ms": 3000}, settle_flip=False)
+        if queued("midflip") or list(Path(temporary).rglob("recall-v1.json")):
+            raise RuntimeError("Audio or grading ran before the turn completed")
+        if sum(a != b for a, b in zip(front, middle)) < 5000:
+            raise RuntimeError("Midflip did not draw a turning card")
+        back = capture(args.exe, args.out, "back", env, [32, ord("R")])
+        if queued("back") != 2:
+            raise RuntimeError("Reveal and replay did not queue cached pronunciation")
         changed = sum(a != b for a, b in zip(front, back))
         if changed < 5000:
             raise RuntimeError("Flipping did not reveal the image/grade controls")
@@ -152,6 +183,9 @@ def main():
         if len(state["cards"]) != 1:
             raise RuntimeError("Expected exactly one explicitly graded card")
         record = next(iter(state["cards"].values()))
+        recognition_key = next(iter(state["cards"]))
+        if not recognition_key.startswith("recognition:"):
+            raise RuntimeError("First grade was not recognition")
         if record["reviews"] != 1 or record["remembered"] != 1 or record["stage"] != 1:
             raise RuntimeError("Actual grade state is wrong")
         reopened = capture(args.exe, args.out, "reopened", env)
@@ -159,11 +193,17 @@ def main():
             raise RuntimeError("Opening the host rewrote review progress")
         if sum(a != b for a, b in zip(front, reopened)) < 300:
             raise RuntimeError("Reopened host ignored the saved schedule")
-        # Second fixture/current-journal card: actual mouse Forgot button.
-        capture(args.exe, args.out, "mouse-graded", env, [32, ("click", 200, 545)])
+        if queued("reopened"):
+            raise RuntimeError("Production front played its answer")
+        capture(args.exe, args.out, "production-back", env, [32])
+        # The other direction of the same word: actual mouse Again button.
+        capture(args.exe, args.out, "mouse-graded", env, [32, ("click", 200, 635)])
         state = json.loads(files[0].read_bytes())
         if len(state["cards"]) != 2 or sum(p["forgotten"] for p in state["cards"].values()) != 1:
             raise RuntimeError("Mouse grade did not persist the second card")
+        production_key = recognition_key.replace("recognition:", "production:", 1)
+        if production_key not in state["cards"] or state["cards"][recognition_key] != record:
+            raise RuntimeError("Directions did not retain independent progress")
         saved = files[0].read_bytes()
         capture(args.exe, args.out, "complete", env)
         if files[0].read_bytes() != saved:
@@ -173,7 +213,7 @@ def main():
         capture(args.exe, args.out, "corrupt", env, [32, ord("2")])
         if files[0].read_bytes() != corrupt:
             raise RuntimeError("Corrupt progress was overwritten")
-        print("Packaged host front/back, keyboard and mouse grades, reopen, completion and corrupt-state checks passed.")
+        print("Packaged host front/midflip/back, reveal-only audio/replay, independent directions, keyboard/mouse grades and corrupt-state checks passed.")
 
 
 if __name__ == "__main__":

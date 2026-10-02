@@ -1,10 +1,92 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "assets": {
-    "speech": {"file": "speech.png", "source": "https://raw.githubusercontent.com/jdecked/twemoji/v17.0.2/assets/72x72/1f4ac.png", "license": "CC-BY-4.0", "attribution": "Twemoji / Twitter and contributors - CC BY 4.0", "changes": "None"},
-    "robot": {"file": "robot.png", "source": "https://raw.githubusercontent.com/jdecked/twemoji/v17.0.2/assets/72x72/1f916.png", "license": "CC-BY-4.0", "attribution": "Twemoji / Twitter and contributors - CC BY 4.0", "changes": "None"},
-    "apple": {"file": "apple.png", "source": "https://raw.githubusercontent.com/jdecked/twemoji/v17.0.2/assets/72x72/1f34e.png", "license": "CC-BY-4.0", "attribution": "Twemoji / Twitter and contributors - CC BY 4.0", "changes": "None"}
+    "conversation": {
+      "file": "conversation.jpg",
+      "source": "https://commons.wikimedia.org/wiki/File:Casual_conversation.jpg",
+      "license": "CC-BY-4.0",
+      "attribution": "Cashinondt / Wikimedia Commons - CC BY 4.0",
+      "changes": "Original unchanged; aspect-fit display"
+    },
+    "morning": {
+      "file": "morning-wakeup.jpg",
+      "source": "https://www.publicdomainpictures.net/en/view-image.php?image=293351&picture=woman-waking-up",
+      "license": "CC0-1.0",
+      "attribution": "Petr Kratochvil / Public Domain Pictures - CC0",
+      "changes": "Unmodified 1280x1920 download; aspect-fit display in separately drawn daylight/alarm scene"
+    },
+    "robot": {
+      "file": "robot-crisp.png",
+      "source": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/17.0.0/color/618x618/1F916.png",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "OpenMoji / HfG Schwabisch Gmund - CC BY-SA 4.0",
+      "changes": "Original unchanged; software-task scene drawn separately"
+    },
+    "apple": {
+      "file": "apple-crisp.png",
+      "source": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/17.0.0/color/618x618/1F34E.png",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "OpenMoji / HfG Schwabisch Gmund - CC BY-SA 4.0",
+      "changes": "Original unchanged"
+    },
+    "assistant": {
+      "file": "assistant-crisp.png",
+      "source": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/17.0.0/color/618x618/1F916.png",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "OpenMoji / HfG Schwabisch Gmund - CC BY-SA 4.0",
+      "changes": "Original unchanged; software-task scene drawn separately"
+    }
   },
-  "by_kana": {"ことば": "speech", "エージェント": "robot", "りんご": "apple", "ロボット": "robot"},
-  "by_id": {}
+  "by_kana": {
+    "ことば": "conversation",
+    "エージェント": "assistant",
+    "あさ": "morning",
+    "りんご": "apple",
+    "ロボット": "robot"
+  },
+  "by_id": {},
+  "audio": {
+    "kotoba": {
+      "file": "kotoba.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    },
+    "ejento": {
+      "file": "ejento.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    },
+    "asa": {
+      "file": "asa.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    },
+    "ringo": {
+      "file": "ringo.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    },
+    "robotto": {
+      "file": "robotto.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    }
+  },
+  "audio_by_kana": {
+    "ことば": "kotoba",
+    "エージェント": "ejento",
+    "あさ": "asa",
+    "りんご": "ringo",
+    "ロボット": "robotto"
+  }
 }

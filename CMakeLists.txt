@@ -44,6 +44,13 @@ target_include_directories(draxul-flashcards-plugin PRIVATE
 target_link_libraries(draxul-flashcards-plugin PRIVATE Draxul::PluginSDK
     Draxul::PluginSupport::Adapter Draxul::PluginSupport::NanoVGPass
     Draxul::PluginSupport::Types draxul-flashcards-review)
+if(APPLE)
+    target_link_libraries(draxul-flashcards-plugin PRIVATE SDL3::Headers)
+    # Share the host's SDL audio implementation, as the other audio product does.
+    target_link_options(draxul-flashcards-plugin PRIVATE "LINKER:-undefined,dynamic_lookup")
+else()
+    target_link_libraries(draxul-flashcards-plugin PRIVATE SDL3::SDL3)
+endif()
 set_target_properties(draxul-flashcards-plugin PROPERTIES PREFIX "" DEBUG_POSTFIX "" OUTPUT_NAME "draxul-flashcards")
 
 set(_shaders)
