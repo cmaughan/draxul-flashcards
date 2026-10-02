@@ -37,11 +37,11 @@ class GeneratorBoundary(unittest.TestCase):
         payload = json.dumps(deck, ensure_ascii=False)
         for private in ("PRIVATE_CONTEXT", "PRIVATE_TIME", "PRIVATE_GUIDE", "meaning", str(self.root)):
             self.assertNotIn(private, payload)
-        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution", "audio", "audio_attribution"})
-        self.assertEqual(deck["schema_version"], 2)
+        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution", "audio", "audio_attribution", "cue", "cue_subject"})
+        self.assertEqual(deck["schema_version"], 3)
         self.assertEqual(deck["kind"], "bidirectional")
         self.assertTrue(all(c["audio"].endswith(".wav") for c in deck["cards"]))
-        self.assertEqual({c["kana"] for c in deck["cards"]}, {"りんご", "ロボット"})
+        self.assertEqual({c["kana"] for c in deck["cards"]}, {"りんご", "ロボット", "それ", "が", "いいね"})
         self.assertTrue(embed.generate(self.source, self.art, self.output))
         stamp = self.output.stat().st_mtime_ns
         self.assertFalse(embed.generate(self.source, self.art, self.output))
@@ -50,7 +50,27 @@ class GeneratorBoundary(unittest.TestCase):
         self.doc["words"].append({"id": "added", "kana": "あ", "meaning": "new fixture", "romaji": "a"})
         self.write()
         self.assertTrue(embed.generate(self.source, self.art, self.output))
-        self.assertEqual(len(embed.build_deck(self.source, self.art)["cards"]), 3)
+        self.assertEqual(len(embed.build_deck(self.source, self.art)["cards"]), 6)
+
+    def test_native_cues_have_media_and_only_active_dependencies(self):
+        import wave
+        deck = embed.build_deck(self.source, self.art)
+        by_kana = {c["kana"]: c for c in deck["cards"]}
+        for kana, cue in (("それ", "listener-reference"), ("が", "subject-marker"), ("いいね", "approval-reaction")):
+            card = by_kana[kana]
+            self.assertEqual(card["cue"], cue)
+            self.assertEqual(card["image"], "")
+            self.assertTrue(card["attribution"])
+            with wave.open(str(ROOT / "assets" / card["audio"]), "rb") as audio:
+                self.assertEqual(audio.getnchannels(), 1)
+                self.assertEqual(audio.getsampwidth(), 2)
+                self.assertEqual(audio.getframerate(), 48000)
+                self.assertGreater(audio.getnframes(), 1000)
+        self.assertEqual(by_kana["が"]["cue_subject"], "それ")
+        self.doc["words"] = [w for w in self.doc["words"] if w["kana"] != "それ"]
+        self.write()
+        with self.assertRaisesRegex(ValueError, "outside this deck"):
+            embed.build_deck(self.source, self.art)
 
     def test_invalid_sources_preserve_previous_output(self):
         embed.generate(self.source, self.art, self.output)

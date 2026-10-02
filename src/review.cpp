@@ -55,19 +55,34 @@ int64_t unix_now()
 std::vector<Card> parse_deck(std::string_view text)
 {
     const auto doc = bounded_json(text);
-    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 2) != 2
+    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 3) != 3
         || doc.at("kind") != "bidirectional" || !doc.at("cards").is_array() || doc.at("cards").size() > 2000)
         throw std::runtime_error("Unsupported embedded deck");
     std::vector<Card> cards;
     std::set<std::string> ids;
     for (const auto& value : doc.at("cards"))
     {
-        if (!value.is_object() || value.size() != 7)
+        if (!value.is_object() || value.size() != 9)
             throw std::runtime_error("Invalid embedded card");
         Card card{ value.at("id").get<std::string>(), value.at("kana").get<std::string>(),
             value.at("romaji").get<std::string>(), value.at("image").get<std::string>(),
             value.at("attribution").get<std::string>(), value.at("audio").get<std::string>(),
             value.at("audio_attribution").get<std::string>() };
+        const auto cue = value.at("cue").get<std::string>();
+        card.cue_subject = value.at("cue_subject").get<std::string>();
+        if (cue == "picture") card.cue = VisualCue::Picture;
+        else if (cue == "listener-reference") card.cue = VisualCue::ListenerReference;
+        else if (cue == "subject-marker") card.cue = VisualCue::SubjectMarker;
+        else if (cue == "approval-reaction") card.cue = VisualCue::ApprovalReaction;
+        else throw std::runtime_error("Unknown visual cue");
+        if ((card.cue == VisualCue::SubjectMarker && card.cue_subject != "それ")
+            || (card.cue != VisualCue::SubjectMarker && !card.cue_subject.empty())
+            || (card.cue != VisualCue::Picture && !card.image.empty()))
+            throw std::runtime_error("Invalid visual cue fields");
+        if ((card.cue == VisualCue::SubjectMarker && card.kana != "が")
+            || (card.cue == VisualCue::ListenerReference && card.kana != "それ")
+            || (card.cue == VisualCue::ApprovalReaction && card.kana != "いいね"))
+            throw std::runtime_error("Native cue does not match its spelling");
         if (!valid_id(card.id) || !ids.insert(card.id).second || card.kana.empty()
             || card.kana.size() > 192 || card.romaji.size() > 256 || card.attribution.size() > 512
             || card.audio_attribution.size() > 512
@@ -79,6 +94,10 @@ std::vector<Card> parse_deck(std::string_view text)
         card.direction = Direction::Production;
         cards.push_back(std::move(card));
     }
+    for (const auto& card : cards)
+        if (!card.cue_subject.empty() && std::none_of(cards.begin(), cards.end(),
+                [&](const Card& subject) { return subject.kana == card.cue_subject; }))
+            throw std::runtime_error("Native cue subject is outside the deck");
     return cards;
 }
 

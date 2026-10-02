@@ -2,6 +2,7 @@
 #include "review_lock.h"
 #include "embedded_deck.h"
 #include "flip.h"
+#include "native_cues.h"
 
 #include <draxul/plugin_adapter.h>
 #include <draxul/plugin_host_services.h>
@@ -65,6 +66,10 @@ struct Instance
     bool frame_ready_logged = false;
     std::string pressed_action;
     std::string status;
+    std::vector<flashcards::Card> cue_examples;
+    bool guide_visible = false, guide_acknowledged = false;
+    std::string guide_error;
+    size_t guide_index = 0;
 };
 
 double steady_seconds()
@@ -141,6 +146,32 @@ void act(Instance& instance, std::string_view action)
 {
     if (instance.quiesced || !instance.visible)
         return;
+    if (action == "help")
+    {
+        stop_audio(instance); instance.flipping = false;
+        instance.guide_visible = true; instance.guide_index = 0; changed(instance); return;
+    }
+    if (instance.guide_visible)
+    {
+        if (action == "close-guide")
+        {
+            if (instance.guide_index + 1 < instance.cue_examples.size())
+            {
+                ++instance.guide_index; changed(instance); return;
+            }
+            if (!instance.guide_acknowledged
+                && instance.services.write_json(DRAXUL_PLUGIN_STORAGE_PLUGIN, "cue-guide-v1",
+                    R"({"schema_version":1,"acknowledged":true})") != DRAXUL_PLUGIN_STORAGE_OK)
+                instance.guide_error = "The guide preference could not be saved. Please retry.";
+            else
+            {
+                instance.guide_acknowledged = true; instance.guide_visible = false;
+                instance.guide_error.clear(); instance.services.request_tick();
+            }
+            changed(instance);
+        }
+        return; // Studying the guide never plays answers or records grades.
+    }
     instance.services.log(DRAXUL_PLUGIN_LOG_DEBUG, "Flashcards action " + std::string(action)
         + " revealed=" + std::to_string(instance.review->revealed())
         + " image=" + std::to_string(instance.review->image_ready()));
@@ -298,6 +329,36 @@ void software_scene(NVGcontext* vg, int handle, float x, float y, float w, float
     nvgFillColor(vg, nvgRGB(91, 132, 180)); nvgFill(vg);
     nvgRestore(vg);
 }
+void draw_guide(Instance& instance, NVGcontext* vg, float left, float panel, float width)
+{
+    const auto ink = nvgRGB(34, 53, 73), muted = nvgRGB(80, 100, 122);
+    rect(vg, left, 96, panel, 422, nvgRGB(248, 247, 242), 22);
+    label(vg, left + 24, 110, 23, "How to read these cues", ink);
+    if (!instance.cue_examples.empty())
+    {
+        const auto& example = instance.cue_examples.at(instance.guide_index);
+        const float x = left + 24, column = panel - 48;
+        flashcards::cues::draw(vg, example, true, x, 150, column, 160);
+        const bool reference = example.cue == flashcards::VisualCue::ListenerReference;
+        const bool approval = example.cue == flashcards::VisualCue::ApprovalReaction;
+        label(vg, x, 326, 21, reference ? "それ  /  That near the listener" : approval ? "いいね  /  That's great!" : "が  /  Subject marker", ink);
+        paragraph(vg, x, 365, column, 16, reference
+            ? "Blue speaks; purple listens. The speaker points to the gold object beside the listener. Recall that object as seen from the speaker. This card teaches the near-listener use."
+            : approval ? "One person shows completed work; the other responds with a friendly thumbs-up. Recall the whole casual approval phrase, いいね, as one item. It is a friendly 'That's great!' or 'Nice!'."
+            : "Gold highlights the subject, それ. The attached green chip immediately AFTER it holds が. On a production front, that chip is blank: recall the taught subject marker. が does not mean 'is'.", muted);
+        if (!reference && !approval)
+            paragraph(vg, x, 466, column, 12,
+                "This is a fragment, not a complete sentence. Other particle choices and uses need context and are outside this card.", muted);
+    }
+    else paragraph(vg, left + 28, 166, panel - 56, 19,
+        "Recognition starts with kana; production starts with a visual cue. Reveal when ready, then choose Again or Remembered. Pronunciation plays only after revealing; R replays it.", muted);
+    const bool more = instance.guide_index + 1 < instance.cue_examples.size();
+    button(instance, vg, left, 542, panel, more ? "Next cue" : "Continue to reviews", "close-guide", nvgRGB(57, 88, 143));
+    label(vg, width / 2, 602, 12, "English help: H or Help. Space continues. "
+        + std::to_string(instance.guide_index + 1) + "/" + std::to_string(std::max<size_t>(1, instance.cue_examples.size())), nvgRGB(153, 173, 197), NVG_ALIGN_CENTER);
+    if (!instance.guide_error.empty())
+        paragraph(vg, left, 630, panel, 12, instance.guide_error, nvgRGB(255, 197, 121));
+}
 void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
 {
     instance.hits.clear();
@@ -318,6 +379,18 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
     rect(vg, 0, 0, width, height, nvgRGB(16, 27, 43), 0);
     label(vg, left, 21, 24, "Japanese flashcards", white);
     label(vg, left, 59, 13, std::to_string(instance.review->due_count()) + " reviews due", muted);
+    if (instance.guide_visible)
+    {
+        draw_guide(instance, vg, left, panel, width);
+        nvgRestore(vg);
+        if (!instance.frame_ready_logged)
+        {
+            instance.services.log(DRAXUL_PLUGIN_LOG_DEBUG, "Flashcards frame ready");
+            instance.frame_ready_logged = true;
+        }
+        return;
+    }
+    button(instance, vg, left + panel - 94, 48, 94, "Help", "help", nvgRGB(34, 55, 77));
     const auto* card = instance.review->current();
     if (card)
     {
@@ -326,8 +399,10 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
         std::string image_name = card->image;
         const bool custom = instance.image_overrides.contains(card->id);
         if (custom) image_name = instance.image_overrides.at(card->id);
-        const int handle = image(instance, vg, image_name);
-        instance.review->set_image_ready(handle > 0);
+        const bool native = !custom && card->cue != flashcards::VisualCue::Picture;
+        const int handle = native ? 0 : image(instance, vg, image_name);
+        const bool visual_ready = native || handle > 0;
+        instance.review->set_image_ready(visual_ready);
         auto frame = instance.flipping ? flashcards::sample_flip(steady_seconds() - instance.flip_started, instance.flip_duration)
             : flashcards::FlipSample{ 1, 0, 0, instance.review->revealed(), true };
         const float cy = 307;
@@ -350,9 +425,11 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
             {
                 const float image_y = frame.back ? 116 : 126;
                 const float image_h = frame.back ? 220 : 350;
-                if (handle > 0)
+                if (visual_ready)
                 {
-                    if (!custom && image_name == "assistant-crisp.png")
+                    if (native)
+                        flashcards::cues::draw(vg, *card, frame.back, left + 24, image_y, panel - 48, image_h);
+                    else if (!custom && image_name == "assistant-crisp.png")
                         software_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
                     else if (!custom && image_name == "morning-wakeup.jpg")
                         morning_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
@@ -376,13 +453,13 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
         nvgRestore(vg);
         if (instance.flipping)
             label(vg, width / 2, 557, 15, "Turning card...", muted, NVG_ALIGN_CENTER);
-        else if (instance.review->revealed() && handle > 0)
+        else if (instance.review->revealed() && visual_ready)
         {
             const float half = (panel - 16) / 2;
             button(instance, vg, left, 542, half, "1  Again", "again", nvgRGB(132, 74, 78));
             button(instance, vg, left + half + 16, 542, half, "2  Remembered", "remembered", nvgRGB(28, 118, 103));
         }
-        else if ((instance.review->revealed() || production) && handle <= 0)
+        else if ((instance.review->revealed() || production) && !visual_ready)
             button(instance, vg, left, 542, panel, "Skip this review", "skip", nvgRGB(59, 80, 108));
         else
         {
@@ -463,7 +540,24 @@ void* create(const DraxulPluginCreateInfoV2* info)
         instance->font = read_asset(instance->services.plugin_directory() / "assets/NotoSansJP.otf", 16 * 1024 * 1024);
         instance->pass = create_plugin_nanovg_pass({ instance->services.plugin_directory() });
         auto* raw = instance.get();
-        instance->review = std::make_unique<flashcards::ReviewSession>(flashcards::parse_deck(flashcards::embedded::deck),
+        auto cards = flashcards::parse_deck(flashcards::embedded::deck);
+        std::set<flashcards::VisualCue> examples;
+        for (const auto& card : cards)
+            if (card.cue != flashcards::VisualCue::Picture && examples.insert(card.cue).second)
+                instance->cue_examples.push_back(card);
+        if (!instance->cue_examples.empty())
+        {
+            const auto saved = instance->services.read_json(DRAXUL_PLUGIN_STORAGE_PLUGIN, "cue-guide-v1");
+            if (saved.ok())
+            {
+                const auto doc = nlohmann::json::parse(saved.json, nullptr, false);
+                instance->guide_acknowledged = doc.is_object() && doc.size() == 2
+                    && doc.contains("schema_version") && doc["schema_version"].is_number_integer() && doc["schema_version"] == 1
+                    && doc.contains("acknowledged") && doc["acknowledged"].is_boolean() && doc["acknowledged"] == true;
+            }
+            instance->guide_visible = !instance->guide_acknowledged;
+        }
+        instance->review = std::make_unique<flashcards::ReviewSession>(std::move(cards),
             [raw]() -> std::optional<std::string> {
                 if (!raw->services.has_storage())
                     throw std::runtime_error("No persistent storage service");
@@ -527,10 +621,17 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
         if (!event->pressed) { i.held_keys.erase(event->logical_key); return 1; }
         if (!i.held_keys.insert(event->logical_key).second
             || !draxul::has_only_modifiers(event->modifiers & ~draxul::kModShift, draxul::kModNone)) return 1;
+        if (i.guide_visible)
+        {
+            if (event->logical_key == 32 || event->logical_key == 13 || event->logical_key == 27)
+                act(i, "close-guide");
+            return 1;
+        }
         switch (event->logical_key)
         {
         case 32: act(i, "flip"); break;
         case 'r': case 'R': act(i, "replay"); break;
+        case 'h': case 'H': case '?': act(i, "help"); break;
         case '1': act(i, "again"); break;
         case '2': act(i, "remembered"); break;
         default: return 0;
@@ -566,7 +667,7 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
 DraxulPluginTickResultV2 tick(void* opaque, const DraxulPluginTickInfoV2*)
 {
     auto& i = *static_cast<Instance*>(opaque);
-    if (!i.visible || i.quiesced) return tick_result(true, DRAXUL_PLUGIN_NO_DEADLINE);
+    if (!i.visible || i.quiesced || i.guide_visible) return tick_result(true, DRAXUL_PLUGIN_NO_DEADLINE);
     if (i.flipping)
     {
         if (flashcards::sample_flip(steady_seconds() - i.flip_started, i.flip_duration).finished)
@@ -618,7 +719,8 @@ int32_t dispatch(void* opaque, const char* id, size_t length)
         return 0;
     const auto action = std::string_view(id, length);
     if (action != "flip" && action != "replay" && action != "remembered"
-        && action != "again" && action != "refresh" && action != "skip")
+        && action != "again" && action != "refresh" && action != "skip"
+        && action != "help" && action != "close-guide")
         return 0;
     act(*static_cast<Instance*>(opaque), std::string_view(id, length));
     return 1;
@@ -626,7 +728,7 @@ int32_t dispatch(void* opaque, const char* id, size_t length)
 constexpr AdapterAction actions[] = {
     { "flip", "Reveal flashcard" }, { "replay", "Replay pronunciation" },
     { "remembered", "Remembered" }, { "again", "Again" }, { "skip", "Skip flashcard" },
-    { "refresh", "Check due reviews" }
+    { "refresh", "Check due reviews" }, { "help", "Explain card cues" }, { "close-guide", "Continue to reviews" }
 };
 using Presentation = PresentationAdapter<actions, presentation, dispatch>;
 const auto api = make_plugin_api({ "dev.draxul.flashcards", "Flashcards", "0.1.0" },

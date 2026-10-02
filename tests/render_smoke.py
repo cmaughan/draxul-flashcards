@@ -151,8 +151,11 @@ def main():
         if sys.platform == "win32":
             env["APPDATA"] = temporary
             env["LOCALAPPDATA"] = temporary
+            directory = Path(temporary) / "draxul/plugin-config/dev.draxul.flashcards/state"
+            directory.mkdir(parents=True)
+            (directory / "cue-guide-v1.json").write_text('{"schema_version":1,"acknowledged":true}')
         env["SDL_AUDIODRIVER"] = "dummy" # Queue verification without test noise.
-        front = capture(args.exe, args.out, "front", env, [ord("R"), ord("H"), ord("2")])
+        front = capture(args.exe, args.out, "front", env, [ord("R"), ord("2")])
         if len(set(front)) < 32:
             raise RuntimeError("Host is blank")
         if sys.platform != "win32":

@@ -92,9 +92,9 @@ TEST_CASE("Embedded words create independent directions and retain existing reco
     auto first = storage.open();
     REQUIRE(recalled(first, true));
     const auto original = storage.progress();
-    storage.cards = parse_deck(R"({"schema_version":2,"kind":"bidirectional","cards":[
+    storage.cards = parse_deck(R"({"schema_version":3,"kind":"bidirectional","cards":[
         {"id":"apple","kana":"りんご","romaji":"ringo","image":"apple.jpg",
-         "attribution":"license","audio":"ringo.wav","audio_attribution":"voice"}]})");
+         "attribution":"license","audio":"ringo.wav","audio_attribution":"voice","cue":"picture","cue_subject":""}]})");
     REQUIRE(storage.cards.size() == 2);
     auto production = storage.open();
     REQUIRE(production.current()->direction == Direction::Production);
@@ -244,4 +244,51 @@ TEST_CASE("Large due decks stop after twenty explicit grades and allow another b
     REQUIRE(recalled(review, false));
     REQUIRE(review.due_count() == 0);
     REQUIRE(storage.writes == 21);
+}
+
+TEST_CASE("Native cue additions retain history and independent schedules without image files", "[flashcards]")
+{
+    DurableStore storage;
+    auto existing = storage.open();
+    REQUIRE(recalled(existing, true));
+    const auto original = storage.progress();
+    storage.cards = parse_deck(R"({"schema_version":3,"kind":"bidirectional","cards":[
+      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":"ga.wav","audio_attribution":"Mei","cue":"subject-marker","cue_subject":"それ"},
+      {"id":"sore","kana":"それ","romaji":"sore","image":"","attribution":"original","audio":"sore.wav","audio_attribution":"Mei","cue":"listener-reference","cue_subject":""},
+      {"id":"ii-ne","kana":"いいね","romaji":"ii ne","image":"","attribution":"original","audio":"ii-ne.wav","audio_attribution":"Mei","cue":"approval-reaction","cue_subject":""}
+    ]})");
+    REQUIRE(storage.cards.size() == 6);
+    REQUIRE(storage.cards[0].cue == VisualCue::SubjectMarker);
+    REQUIRE(storage.cards[0].cue_subject == "それ");
+    REQUIRE(storage.cards[2].cue == VisualCue::ListenerReference);
+    REQUIRE(storage.cards[4].cue == VisualCue::ApprovalReaction);
+    auto recognition = storage.open();
+    REQUIRE(recalled(recognition, true));
+    const auto recorded = parse_state(*storage.saved).at("recognition:ga");
+    auto production = storage.open();
+    REQUIRE(production.current()->direction == Direction::Production);
+    REQUIRE(recalled(production, false));
+    auto state = parse_state(*storage.saved);
+    REQUIRE(state.at("recognition:apple") == original);
+    REQUIRE(state.at("recognition:ga") == recorded);
+    REQUIRE(state.at("production:ga").forgotten == 1);
+    REQUIRE(state.at("production:ga").due == storage.now + 600);
+    auto reopened = storage.open();
+    REQUIRE(reopened.current()->id == "sore");
+    REQUIRE(recalled(reopened, true));
+    REQUIRE(recalled(reopened, true));
+    REQUIRE(recalled(reopened, true));
+    REQUIRE(recalled(reopened, true));
+    REQUIRE_FALSE(storage.open().current());
+    REQUIRE(parse_state(*storage.saved).size() == 7);
+}
+
+TEST_CASE("Native cue spelling and active subject dependencies are validated", "[flashcards]")
+{
+    const std::string ga_only = R"({"schema_version":3,"kind":"bidirectional","cards":[
+      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":"ga.wav","audio_attribution":"Mei","cue":"subject-marker","cue_subject":"それ"}]})";
+    REQUIRE_THROWS(parse_deck(ga_only));
+    auto wrong_cue = ga_only;
+    wrong_cue.replace(wrong_cue.find("subject-marker"), 14, "unknown-cue");
+    REQUIRE_THROWS(parse_deck(wrong_cue));
 }

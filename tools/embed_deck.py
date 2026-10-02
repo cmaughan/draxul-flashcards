@@ -72,10 +72,23 @@ def build_deck(source, artwork):
     if not isinstance(words, list) or len(words) > MAX_WORDS:
         raise ValueError("words must be an array of at most 2000 entries")
     art = read_json(artwork)
-    if not isinstance(art, dict) or art.get("schema_version") != 2 or art.keys() != {"schema_version", "assets", "audio", "by_kana", "by_id", "audio_by_kana"}:
+    if not isinstance(art, dict) or art.get("schema_version") != 3 or art.keys() != {"schema_version", "assets", "audio", "by_kana", "by_id", "audio_by_kana", "cues", "cue_by_kana"}:
         raise ValueError("unsupported artwork schema")
-    if not all(isinstance(art[k], dict) for k in ("assets", "audio", "by_kana", "by_id", "audio_by_kana")):
+    if not all(isinstance(art[k], dict) for k in ("assets", "audio", "by_kana", "by_id", "audio_by_kana", "cues", "cue_by_kana")):
         raise ValueError("invalid artwork mappings")
+    for cue in art["cues"].values():
+        if not isinstance(cue, dict) or cue.keys() != {"kind", "subject", "attribution"}:
+            raise ValueError("invalid native cue metadata")
+        text_field(cue, "kind", 64, True)
+        text_field(cue, "subject", 192)
+        if cue["kind"] not in {"listener-reference", "subject-marker", "approval-reaction"}:
+            raise ValueError("unsupported native cue")
+        text_field(cue, "attribution", 512, True)
+        if cue["subject"] != ("それ" if cue["kind"] == "subject-marker" else ""):
+            raise ValueError("invalid native cue subject")
+    if any(not isinstance(key, str) or not isinstance(val, str) or val not in art["cues"]
+           for key, val in art["cue_by_kana"].items()):
+        raise ValueError("cue mapping refers to an unknown cue")
     for asset in list(art["assets"].values()) + list(art["audio"].values()):
         if not isinstance(asset, dict) or asset.keys() != {"file", "source", "license", "attribution", "changes"}:
             raise ValueError("invalid artwork metadata")
@@ -106,11 +119,19 @@ def build_deck(source, artwork):
         romaji = text_field(word, "romaji", 256)
         asset_id = art["by_id"].get(word_id, art["by_kana"].get(kana, ""))
         asset = art["assets"].get(asset_id, {})
+        cue = {} if asset_id else art["cues"].get(art["cue_by_kana"].get(kana, ""), {})
+        cue_kana = {"listener-reference": "それ", "subject-marker": "が", "approval-reaction": "いいね"}
+        if cue and kana != cue_kana[cue["kind"]]:
+            raise ValueError("native cue does not match its spelling")
         audio = art["audio"].get(art["audio_by_kana"].get(kana, ""), {})
         cards.append({"id": word_id, "kana": kana, "romaji": romaji,
-                      "image": asset.get("file", ""), "attribution": asset.get("attribution", ""),
+                      "image": asset.get("file", ""), "attribution": cue.get("attribution", asset.get("attribution", "")),
+                      "cue": cue.get("kind", "picture"), "cue_subject": cue.get("subject", ""),
                       "audio": audio.get("file", ""), "audio_attribution": audio.get("attribution", "")})
-    return {"schema_version": 2, "kind": "bidirectional", "cards": sorted(cards, key=lambda c: c["id"])}
+    active_kana = {card["kana"] for card in cards}
+    if any(card["cue_subject"] and card["cue_subject"] not in active_kana for card in cards):
+        raise ValueError("native cue depends on vocabulary outside this deck")
+    return {"schema_version": 3, "kind": "bidirectional", "cards": sorted(cards, key=lambda c: c["id"])}
 
 
 def generate(source, artwork, output):

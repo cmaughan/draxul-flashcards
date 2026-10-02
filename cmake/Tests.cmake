@@ -11,3 +11,9 @@ add_test(NAME draxul-render-flashcards
         --exe "$<TARGET_FILE:draxul>" --out "${CMAKE_BINARY_DIR}/flashcards-render")
 set_tests_properties(draxul-render-flashcards PROPERTIES
     LABELS "flashcards;render" RESOURCE_LOCK draxul_gpu TIMEOUT 120)
+add_test(NAME draxul-render-flashcards-cues
+    COMMAND ${Python3_EXECUTABLE} "${_flash_root}/tests/native_cue_smoke.py"
+        --exe "$<TARGET_FILE:draxul>" --out "${CMAKE_BINARY_DIR}/flashcards-native-cues"
+        --source "${DRAXUL_FLASHCARDS_VOCABULARY_SOURCE}")
+set_tests_properties(draxul-render-flashcards-cues PROPERTIES
+    LABELS "flashcards;render" RESOURCE_LOCK draxul_gpu TIMEOUT 180)

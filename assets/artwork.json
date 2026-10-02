@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "assets": {
     "conversation": {
       "file": "conversation.jpg",
@@ -80,6 +80,27 @@
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
       "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    },
+    "sore": {
+      "file": "sore.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    },
+    "ga": {
+      "file": "ga.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+    },
+    "ii-ne": {
+      "file": "ii-ne.wav",
+      "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
+      "license": "CC-BY-3.0",
+      "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
     }
   },
   "audio_by_kana": {
@@ -87,6 +108,31 @@
     "エージェント": "ejento",
     "あさ": "asa",
     "りんご": "ringo",
-    "ロボット": "robotto"
+    "ロボット": "robotto",
+    "それ": "sore",
+    "が": "ga",
+    "いいね": "ii-ne"
+  },
+  "cues": {
+    "listener-reference": {
+      "kind": "listener-reference",
+      "subject": "",
+      "attribution": "Draxul Flashcards / original vector diagram"
+    },
+    "subject-marker": {
+      "kind": "subject-marker",
+      "subject": "それ",
+      "attribution": "Draxul Flashcards / original grammar diagram"
+    },
+    "approval-reaction": {
+      "kind": "approval-reaction",
+      "subject": "",
+      "attribution": "Draxul Flashcards / original approval diagram"
+    }
+  },
+  "cue_by_kana": {
+    "それ": "listener-reference",
+    "が": "subject-marker",
+    "いいね": "approval-reaction"
   }
 }

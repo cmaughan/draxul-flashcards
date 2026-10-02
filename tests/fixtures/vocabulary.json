@@ -1,7 +1,35 @@
 {
   "schema_version": 1,
   "words": [
-    {"id": "fixture-apple", "kana": "りんご", "meaning": "apple", "romaji": "ringo"},
-    {"id": "fixture-robot", "kana": "ロボット", "meaning": "robot", "romaji": "robotto"}
+    {
+      "id": "fixture-apple",
+      "kana": "りんご",
+      "meaning": "apple",
+      "romaji": "ringo"
+    },
+    {
+      "id": "fixture-robot",
+      "kana": "ロボット",
+      "meaning": "robot",
+      "romaji": "robotto"
+    },
+    {
+      "id": "fixture-sore",
+      "kana": "それ",
+      "meaning": "that near the listener",
+      "romaji": "sore"
+    },
+    {
+      "id": "fixture-ga",
+      "kana": "が",
+      "meaning": "subject marker",
+      "romaji": "ga"
+    },
+    {
+      "id": "fixture-ii-ne",
+      "kana": "いいね",
+      "meaning": "friendly approval as a whole phrase",
+      "romaji": "ii ne"
+    }
   ]
 }

@@ -12,11 +12,14 @@
 namespace flashcards
 {
 enum class Direction { Recognition, Production };
+enum class VisualCue { Picture, ListenerReference, SubjectMarker, ApprovalReaction };
 struct Card
 {
     std::string id, kana, romaji, image, attribution;
     std::string audio, audio_attribution;
     Direction direction = Direction::Recognition;
+    VisualCue cue = VisualCue::Picture;
+    std::string cue_subject;
 };
 
 struct Progress
