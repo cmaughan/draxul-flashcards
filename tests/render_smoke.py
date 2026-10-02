@@ -62,6 +62,11 @@ def find_window(pid):
 
 def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=True):
     path = out / (name + ".bmp")
+    log = out / (name + ".log")
+    # A previous run's readiness/reveal diagnostics must never satisfy this
+    # child process's input barriers before it has rendered its first frame.
+    log.unlink(missing_ok=True)
+    path.unlink(missing_ok=True)
     command = [str(exe), "--plugin", "dev.draxul.flashcards",
         "--screenshot", str(path), "--screenshot-size", "900x760",
         "--screenshot-delay", str(delay), "--log-file", str(out / (name + ".log"))]
@@ -72,7 +77,6 @@ def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=T
     try:
         if keys and sys.platform == "win32":
             user, hwnd = find_window(process.pid)
-            log = out / (name + ".log")
             for _ in range(140):
                 if log.exists() and "Flashcards frame ready" in log.read_text(errors="replace"):
                     break
