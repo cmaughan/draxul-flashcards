@@ -72,7 +72,7 @@ def build_deck(source, artwork):
     if not isinstance(words, list) or len(words) > MAX_WORDS:
         raise ValueError("words must be an array of at most 2000 entries")
     art = read_json(artwork)
-    if not isinstance(art, dict) or art.get("schema_version") != 3 or art.keys() != {"schema_version", "assets", "audio", "by_kana", "by_id", "audio_by_kana", "cues", "cue_by_kana"}:
+    if not isinstance(art, dict) or art.get("schema_version") != 4 or art.keys() != {"schema_version", "assets", "audio", "by_kana", "by_id", "audio_by_kana", "cues", "cue_by_kana"}:
         raise ValueError("unsupported artwork schema")
     if not all(isinstance(art[k], dict) for k in ("assets", "audio", "by_kana", "by_id", "audio_by_kana", "cues", "cue_by_kana")):
         raise ValueError("invalid artwork mappings")
@@ -89,16 +89,29 @@ def build_deck(source, artwork):
     if any(not isinstance(key, str) or not isinstance(val, str) or val not in art["cues"]
            for key, val in art["cue_by_kana"].items()):
         raise ValueError("cue mapping refers to an unknown cue")
-    for asset in list(art["assets"].values()) + list(art["audio"].values()):
-        if not isinstance(asset, dict) or asset.keys() != {"file", "source", "license", "attribution", "changes"}:
+    for kind in ("assets", "audio"):
+      for asset in art[kind].values():
+        fields = {"file", "source", "license", "attribution", "changes"}
+        if kind == "audio": fields |= {"speaker", "synthetic", "quality", "sha256"}
+        if not isinstance(asset, dict) or asset.keys() != fields:
             raise ValueError("invalid artwork metadata")
-        for field in asset:
-            text_field(asset, field, 512, True)
-        if not re.fullmatch(r"[a-z0-9_-]+\.(png|jpg|jpeg|wav)", asset["file"]) or not asset["source"].startswith("https://") or asset["license"] not in {"CC-BY-4.0", "CC-BY-SA-4.0", "CC0-1.0", "CC-BY-3.0"}:
+        for field in fields - {"synthetic"}: text_field(asset, field, 512, True)
+        extension = r"wav" if kind == "audio" else r"png|jpg|jpeg"
+        if not re.fullmatch(r"[a-z0-9_-]+\.(" + extension + ")", asset["file"]) or not asset["source"].startswith("https://") or asset["license"] not in {"CC-BY-4.0", "CC-BY-SA-4.0", "CC0-1.0", "CC-BY-3.0"}:
             raise ValueError("media needs a vetted file, source and supported bundling license")
+        if kind == "audio":
+            if type(asset["synthetic"]) is not bool or not re.fullmatch(r"[0-9a-f]{64}", asset["sha256"]):
+                raise ValueError("audio needs origin and checksum")
+            data = (artwork.parent / asset["file"]).read_bytes()
+            if hashlib.sha256(data).hexdigest() != asset["sha256"]:
+                raise ValueError("cached audio checksum mismatch")
     for mapping, assets in ((art["audio_by_kana"], art["audio"]),):
-        if any(not isinstance(key, str) or not isinstance(val, str) or val not in assets for key, val in mapping.items()):
-            raise ValueError("audio mapping refers to an unknown asset")
+        for key, values in mapping.items():
+            if not isinstance(key, str) or not isinstance(values, list) or not 1 <= len(values) <= 8 or any(not isinstance(v,str) or v not in assets for v in values):
+                raise ValueError("audio mapping needs one to eight known clips")
+            speakers = [assets[v]["speaker"] for v in values]
+            if len(set(speakers)) != len(speakers) or (len(values) > 1 and any(assets[v]["synthetic"] for v in values)):
+                raise ValueError("human speaker lists cannot duplicate speakers or mix synthetic fallback")
     for mapping in (art["by_id"], art["by_kana"]):
         if any(not isinstance(key, str) or not isinstance(val, str) or val not in art["assets"] for key, val in mapping.items()):
             raise ValueError("artwork mapping refers to an unknown asset")
@@ -123,15 +136,15 @@ def build_deck(source, artwork):
         cue_kana = {"listener-reference": "それ", "subject-marker": "が", "approval-reaction": "いいね"}
         if cue and kana != cue_kana[cue["kind"]]:
             raise ValueError("native cue does not match its spelling")
-        audio = art["audio"].get(art["audio_by_kana"].get(kana, ""), {})
+        audio = [art["audio"][key] for key in art["audio_by_kana"].get(kana, [])]
         cards.append({"id": word_id, "kana": kana, "romaji": romaji,
                       "image": asset.get("file", ""), "attribution": cue.get("attribution", asset.get("attribution", "")),
                       "cue": cue.get("kind", "picture"), "cue_subject": cue.get("subject", ""),
-                      "audio": audio.get("file", ""), "audio_attribution": audio.get("attribution", "")})
+                      "audio": [{field: clip[field] for field in ("file", "attribution", "speaker", "synthetic")} for clip in audio]})
     active_kana = {card["kana"] for card in cards}
     if any(card["cue_subject"] and card["cue_subject"] not in active_kana for card in cards):
         raise ValueError("native cue depends on vocabulary outside this deck")
-    return {"schema_version": 3, "kind": "bidirectional", "cards": sorted(cards, key=lambda c: c["id"])}
+    return {"schema_version": 4, "kind": "bidirectional", "cards": sorted(cards, key=lambda c: c["id"])}
 
 
 def generate(source, artwork, output):

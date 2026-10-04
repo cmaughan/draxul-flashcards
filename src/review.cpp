@@ -44,6 +44,45 @@ bool valid_id(const std::string& id)
     static const std::regex pattern("^[a-z0-9][a-z0-9._-]{0,95}$");
     return std::regex_match(id, pattern);
 }
+AudioClip parse_clip(const Json& value, bool private_cache)
+{
+    if (!value.is_object() || value.size() != (private_cache ? 9 : 4))
+        throw std::runtime_error("Invalid pronunciation metadata");
+    AudioClip clip{value.at("file").get<std::string>(), value.at("attribution").get<std::string>(),
+        value.at("speaker").get<std::string>(), value.at("synthetic").get<bool>(), private_cache};
+    if (!std::regex_match(clip.file, std::regex("[a-z0-9_-]+\\.wav")) || clip.attribution.empty()
+        || clip.attribution.size() > 512 || clip.speaker.empty() || clip.speaker.size() > 96)
+        throw std::runtime_error("Invalid pronunciation fields");
+    if (private_cache)
+    {
+        if (clip.synthetic || value.at("permission") != "personal-use-authorized")
+            throw std::runtime_error("Private human audio requires explicit personal-use authorization");
+        for (const auto* field : {"source", "license", "changes", "quality"})
+        {
+            const auto text = value.at(field).get<std::string>();
+            if (text.empty() || text.size() > 512)
+                throw std::runtime_error("Private pronunciation needs provenance and quality notes");
+        }
+    }
+    return clip;
+}
+std::vector<AudioClip> parse_clips(const Json& value, bool private_cache)
+{
+    if (!value.is_array() || value.size() > 8)
+        throw std::runtime_error("At most eight pronunciations per word");
+    std::vector<AudioClip> clips;
+    std::set<std::string> files, speakers;
+    for (const auto& item : value)
+    {
+        auto clip = parse_clip(item, private_cache);
+        if (!files.insert(clip.file).second || !speakers.insert(clip.speaker).second)
+            throw std::runtime_error("Pronunciations must have distinct files and stated speakers");
+        clips.push_back(std::move(clip));
+    }
+    if (clips.size() > 1 && std::any_of(clips.begin(), clips.end(), [](const auto& c){return c.synthetic;}))
+        throw std::runtime_error("Synthetic fallback cannot be mixed into human speaker cycling");
+    return clips;
+}
 } // namespace
 
 int64_t unix_now()
@@ -55,19 +94,18 @@ int64_t unix_now()
 std::vector<Card> parse_deck(std::string_view text)
 {
     const auto doc = bounded_json(text);
-    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 3) != 3
+    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 4) != 4
         || doc.at("kind") != "bidirectional" || !doc.at("cards").is_array() || doc.at("cards").size() > 2000)
         throw std::runtime_error("Unsupported embedded deck");
     std::vector<Card> cards;
     std::set<std::string> ids;
     for (const auto& value : doc.at("cards"))
     {
-        if (!value.is_object() || value.size() != 9)
+        if (!value.is_object() || value.size() != 8)
             throw std::runtime_error("Invalid embedded card");
         Card card{ value.at("id").get<std::string>(), value.at("kana").get<std::string>(),
             value.at("romaji").get<std::string>(), value.at("image").get<std::string>(),
-            value.at("attribution").get<std::string>(), value.at("audio").get<std::string>(),
-            value.at("audio_attribution").get<std::string>() };
+            value.at("attribution").get<std::string>(), parse_clips(value.at("audio"), false) };
         const auto cue = value.at("cue").get<std::string>();
         card.cue_subject = value.at("cue_subject").get<std::string>();
         if (cue == "picture") card.cue = VisualCue::Picture;
@@ -85,9 +123,7 @@ std::vector<Card> parse_deck(std::string_view text)
             throw std::runtime_error("Native cue does not match its spelling");
         if (!valid_id(card.id) || !ids.insert(card.id).second || card.kana.empty()
             || card.kana.size() > 192 || card.romaji.size() > 256 || card.attribution.size() > 512
-            || card.audio_attribution.size() > 512
-            || (!card.image.empty() && !std::regex_match(card.image, std::regex("[a-z0-9_-]+\\.(png|jpg|jpeg)")))
-            || (!card.audio.empty() && !std::regex_match(card.audio, std::regex("[a-z0-9_-]+\\.wav"))))
+            || (!card.image.empty() && !std::regex_match(card.image, std::regex("[a-z0-9_-]+\\.(png|jpg|jpeg)"))))
             throw std::runtime_error("Invalid embedded card fields");
         cards.push_back(std::move(card));
         card = cards.back();
@@ -99,6 +135,32 @@ std::vector<Card> parse_deck(std::string_view text)
                 [&](const Card& subject) { return subject.kana == card.cue_subject; }))
             throw std::runtime_error("Native cue subject is outside the deck");
     return cards;
+}
+
+std::map<std::string, std::vector<AudioClip>> parse_private_audio(std::string_view text, const std::vector<Card>& cards)
+{
+    const auto doc = bounded_json(text);
+    if (!doc.is_object() || doc.size() != 2 || integer(doc, "schema_version", 1) != 1
+        || !doc.at("entries").is_object() || doc.at("entries").size() > 2000)
+        throw std::runtime_error("Unsupported private audio manifest");
+    std::map<std::string, std::vector<AudioClip>> selected;
+    for (const auto& [key, entry] : doc.at("entries").items())
+    {
+        if (!valid_id(key) || !entry.is_object() || entry.size() != 2 || !entry.at("kana").is_string())
+            throw std::runtime_error("Invalid private audio entry");
+        auto clips = parse_clips(entry.at("clips"), true);
+        const auto card = std::find_if(cards.begin(), cards.end(), [&](const auto& c){return c.id == key;});
+        if (card != cards.end())
+        {
+            if (entry.at("kana") != card->kana) throw std::runtime_error("Private pronunciation spelling mismatch");
+            if (!clips.empty()) selected.emplace(key, std::move(clips));
+        }
+    }
+    return selected;
+}
+size_t next_audio_index(size_t current, size_t count)
+{
+    return count ? (current % count + 1) % count : 0;
 }
 
 State parse_state(std::string_view text)

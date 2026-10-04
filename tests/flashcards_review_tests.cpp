@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <chrono>
 #include <filesystem>
+#include <nlohmann/json.hpp>
 
 namespace
 {
@@ -33,6 +34,38 @@ bool recalled(ReviewSession& s, bool correct)
     s.set_image_ready(true);
     s.flip();
     return s.grade(correct);
+}
+
+TEST_CASE("Private human clips require provenance and exact spelling without resetting history", "[flashcards]")
+{
+    using Json = nlohmann::json;
+    DurableStore storage;
+    auto review = storage.open();
+    REQUIRE(recalled(review, true));
+    const auto history = storage.saved;
+    const Json clip = {{"file","speaker-a.wav"},{"attribution","Speaker A"},
+        {"speaker","Speaker A"},{"synthetic",false},{"source","https://example.com/authorized"},
+        {"license","personal-use-only"},{"permission","personal-use-authorized"},
+        {"changes","Unchanged complete word"},{"quality","Human listening review pending"}};
+    Json doc = {{"schema_version",1},{"entries",{{"apple",{{"kana","kana"},{"clips",Json::array({clip})}}}}}};
+    auto chosen = parse_private_audio(doc.dump(), storage.cards);
+    REQUIRE(chosen.at("apple").front().private_cache);
+    REQUIRE_FALSE(chosen.at("apple").front().synthetic);
+    storage.cards.front().audio = chosen.at("apple");
+    REQUIRE_FALSE(storage.open().current());
+    REQUIRE(storage.saved == history);
+    doc["entries"]["apple"]["kana"] = "wrong";
+    REQUIRE_THROWS(parse_private_audio(doc.dump(),storage.cards));
+    doc["entries"]["apple"]["kana"] = "kana";
+    doc["entries"]["apple"]["clips"][0]["permission"] = "unknown";
+    REQUIRE_THROWS(parse_private_audio(doc.dump(),storage.cards));
+    doc["entries"]["apple"]["clips"][0] = clip;
+    doc["entries"]["apple"]["clips"].push_back(clip);
+    REQUIRE_THROWS(parse_private_audio(doc.dump(),storage.cards));
+    REQUIRE(next_audio_index(0,0) == 0);
+    REQUIRE(next_audio_index(0,1) == 0);
+    REQUIRE(next_audio_index(0,3) == 1);
+    REQUIRE(next_audio_index(2,3) == 0);
 }
 }
 
@@ -92,9 +125,9 @@ TEST_CASE("Embedded words create independent directions and retain existing reco
     auto first = storage.open();
     REQUIRE(recalled(first, true));
     const auto original = storage.progress();
-    storage.cards = parse_deck(R"({"schema_version":3,"kind":"bidirectional","cards":[
+    storage.cards = parse_deck(R"({"schema_version":4,"kind":"bidirectional","cards":[
         {"id":"apple","kana":"りんご","romaji":"ringo","image":"apple.jpg",
-         "attribution":"license","audio":"ringo.wav","audio_attribution":"voice","cue":"picture","cue_subject":""}]})");
+         "attribution":"license","audio":[{"file":"ringo.wav","attribution":"voice","speaker":"Mei synthetic voice","synthetic":true}],"cue":"picture","cue_subject":""}]})");
     REQUIRE(storage.cards.size() == 2);
     auto production = storage.open();
     REQUIRE(production.current()->direction == Direction::Production);
@@ -252,10 +285,10 @@ TEST_CASE("Native cue additions retain history and independent schedules without
     auto existing = storage.open();
     REQUIRE(recalled(existing, true));
     const auto original = storage.progress();
-    storage.cards = parse_deck(R"({"schema_version":3,"kind":"bidirectional","cards":[
-      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":"ga.wav","audio_attribution":"Mei","cue":"subject-marker","cue_subject":"それ"},
-      {"id":"sore","kana":"それ","romaji":"sore","image":"","attribution":"original","audio":"sore.wav","audio_attribution":"Mei","cue":"listener-reference","cue_subject":""},
-      {"id":"ii-ne","kana":"いいね","romaji":"ii ne","image":"","attribution":"original","audio":"ii-ne.wav","audio_attribution":"Mei","cue":"approval-reaction","cue_subject":""}
+    storage.cards = parse_deck(R"({"schema_version":4,"kind":"bidirectional","cards":[
+      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":[{"file":"ga.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"subject-marker","cue_subject":"それ"},
+      {"id":"sore","kana":"それ","romaji":"sore","image":"","attribution":"original","audio":[{"file":"sore.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"listener-reference","cue_subject":""},
+      {"id":"ii-ne","kana":"いいね","romaji":"ii ne","image":"","attribution":"original","audio":[{"file":"ii-ne.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"approval-reaction","cue_subject":""}
     ]})");
     REQUIRE(storage.cards.size() == 6);
     REQUIRE(storage.cards[0].cue == VisualCue::SubjectMarker);
@@ -285,8 +318,8 @@ TEST_CASE("Native cue additions retain history and independent schedules without
 
 TEST_CASE("Native cue spelling and active subject dependencies are validated", "[flashcards]")
 {
-    const std::string ga_only = R"({"schema_version":3,"kind":"bidirectional","cards":[
-      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":"ga.wav","audio_attribution":"Mei","cue":"subject-marker","cue_subject":"それ"}]})";
+    const std::string ga_only = R"({"schema_version":4,"kind":"bidirectional","cards":[
+      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":[{"file":"ga.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"subject-marker","cue_subject":"それ"}]})";
     REQUIRE_THROWS(parse_deck(ga_only));
     auto wrong_cue = ga_only;
     wrong_cue.replace(wrong_cue.find("subject-marker"), 14, "unknown-cue");

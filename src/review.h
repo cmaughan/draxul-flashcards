@@ -13,10 +13,16 @@ namespace flashcards
 {
 enum class Direction { Recognition, Production };
 enum class VisualCue { Picture, ListenerReference, SubjectMarker, ApprovalReaction };
+struct AudioClip
+{
+    std::string file, attribution, speaker;
+    bool synthetic = false;
+    bool private_cache = false;
+};
 struct Card
 {
     std::string id, kana, romaji, image, attribution;
-    std::string audio, audio_attribution;
+    std::vector<AudioClip> audio;
     Direction direction = Direction::Recognition;
     VisualCue cue = VisualCue::Picture;
     std::string cue_subject;
@@ -32,6 +38,8 @@ struct Progress
 
 using State = std::map<std::string, Progress>;
 std::vector<Card> parse_deck(std::string_view json);
+std::map<std::string, std::vector<AudioClip>> parse_private_audio(std::string_view json, const std::vector<Card>& cards);
+size_t next_audio_index(size_t current, size_t count);
 State parse_state(std::string_view json);
 std::string serialize_state(const State& state);
 int64_t unix_now();

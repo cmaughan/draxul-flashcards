@@ -2,8 +2,8 @@
 
 A mounted native Draxul product plugin for translation-free Japanese practice.
 Each word has independent recognition and production schedules. Recognition shows
-kana on the front; production shows only a picture association. Both backs show
-the picture, kana, romanization and cached pronunciation. English translations
+kana on the front; production shows a picture or native diagram association. Both backs show
+the cue, kana, romanization and cached pronunciation. English translations
 and conversational journal details are never embedded.
 
 ## Launch
@@ -45,6 +45,10 @@ word list itself is still personal data.
 
 - Space / click card / Reveal: animate the turn. Flipping never records success.
 - After the turn finishes: pronunciation plays; R / Replay plays it again.
+- N / Another speaker: cycle cached human recordings after reveal, where available.
+- H / Help: English explanation of the visual conventions. New cue decks open
+  this guide before reviews; completing its pages saves `cue-guide-v1` separately
+  from recall. Studying help neither plays audio nor records grades.
 - After revealing: 1 / Again, 2 / Remembered. Mouse buttons provide the same actions.
 - Front-side hints, audio and grades are unavailable, including during the turn.
 - Missing audio/device: an unavailable message appears; visual grading still works.
@@ -69,8 +73,8 @@ Each grade re-reads state under a nonblocking process file lock, rejects stale-c
 grades and commits through the SDK's atomic plugin-scope JSON storage before advancing.
 Close/rebuild/reopen keeps progress. Held keys and repeated mouse-down events cannot
 grade subsequent cards. Historical assisted counters are retained, but new grades
-are always explicit, unassisted self-reports. Grading one direction does not change
-the other. The generated deck uses schema 2, with one media record per word expanded
+are explicit self-reports. Grading one direction does not change
+the other. The generated deck uses schema 4, with one media record per word expanded
 into both directions by the review model.
 
 Storage key: `recall-v1`, under the host's plugin config path `state/recall-v1.json`.
@@ -89,19 +93,29 @@ directory. Add ID overrides to choose a more personally meaningful picture witho
 changing the journal or losing recall history. New words lacking vetted art show
 the missing-image state; curation is a deliberate update, not arbitrary web scraping.
 
-The conversation photograph associates with word/language; a robot in a laptop
+The printed-page photograph emphasizes one actual printed word: a gold outline
+keeps it sharp while surrounding text is subdued. Neither the target kana nor
+its English translation appears in the picture-first cue. A robot in a laptop
 and task scene associates with a software agent. Abstract associations can be
 ambiguous, so choose a picture meaningful to you. Morning shows a person waking
 in bed beside a daylight window and a 07:00 alarm. Prefer cues that clearly express
 the intended sense over attractive but ambiguous scenery. Creator/license attribution appears on the back without image titles
 translating the target.
 
+Native NanoVG diagrams teach それ as the speaker pointing beside the listener;
+が as a chip immediately after the highlighted subject それ (blank on the
+production front); and いいね as one friendly approval phrase expressed by a
+thumbs-up reaction to completed work. The grammar fragment teaches the requested
+subject-marker function, not "is" or a uniquely determined completion of a full
+sentence. Its Japanese dependency must exist in the active deck. Normal reviews
+remain translation-free; the optional English guide explains these associations.
+
 Runtime plugin configuration also supports replacement images without rebuilding:
 
 ```json
 {
   "image_directory": "D:/FlashcardPictures",
-  "images": { "kotoba": "my-conversation.jpg" }
+  "images": { "kotoba": "my-printed-page.jpg" }
 }
 ```
 
@@ -113,8 +127,11 @@ graded. `flip_duration_ms` optionally sets 100–3000 ms (default 580 ms).
 
 Cached media sources and licenses:
 
-- [Casual conversation](https://commons.wikimedia.org/wiki/File:Casual_conversation.jpg):
-  Cashinondt, CC BY 4.0; original unchanged, displayed with aspect fit.
+- [Words on a Page](https://commons.wikimedia.org/wiki/File:Words_on_a_Page.png):
+  Kasharp, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/);
+  original PNG unchanged, with a rotated display crop, subdued surround and gold
+  word outline. The photographic display composition shares that licence.
+  See [source and display provenance](docs/printed-word-cue.md).
 - [Woman waking up](https://www.publicdomainpictures.net/en/view-image.php?image=293351&picture=woman-waking-up):
   Petr Kratochvil, CC0; unmodified 1280x1920 download, displayed with aspect fit
   beside a separately drawn daylight window and early alarm.
@@ -122,12 +139,37 @@ Cached media sources and licenses:
   HfG Schwabisch Gmund and contributors, CC BY-SA 4.0; original 618px robot/apple
   PNGs, license in `assets/OPENMOJI-LICENSE.txt`. The separately drawn software-task
   composition is offered under the same CC BY-SA 4.0 license.
-- Pronunciation WAVs: synthesized using pyopenjtalk-plus 0.4.1.post9 and the
+- Human pronunciation: complete publisher-released Tofugu/WaniKani recordings
+  for ことば and あさ, plus CKali's Lingua Libre あさ. Sources, SHA-256,
+  licence, edits, stated speaker and quality limits are in `assets/artwork.json`;
+  see [coverage and curation evidence](docs/audio-coverage.md).
+- Fallback pronunciation WAVs: synthesized using pyopenjtalk-plus 0.4.1.post9 and the
   [Mei voice](https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice),
   MMDAgent / Nagoya Institute of Technology, CC BY 3.0; full voice license in
   `assets/MEI-VOICE-LICENSE.txt`. Mono 48 kHz PCM16 clips are cached and marked
   synthetic. They are pronunciation aids, not native recordings or a pitch-accent
   assessment. New unmapped words have no pronunciation until curated.
+
+Prefer natural human audio going forward, ideally 2–3 distinct native Japanese
+speakers per entry where suitable recordings are available. Human and synthetic
+clips cannot share a cycling list. Missing selected human files show unavailable;
+the app never silently switches to synthesis. Clip changes, replay and cycling
+do not modify recognition/production schedules or the conversational journal.
+
+`audio_directory` optionally selects an absolute private cache outside the plugin
+package, containing a schema-1 `manifest.json` and WAV files. Runtime overrides
+are selected by stable ID plus exact kana; they never enter generated headers or
+the CMake asset-copy list. Keep the directory outside every public repository and
+published package. Use only recordings actually authorized for that personal use.
+Each clip requires `file`, `speaker`, `synthetic` (false), `attribution`, `source`,
+`license`, `changes`, `quality` and `permission` (`personal-use-authorized`).
+The manifest has `schema_version: 1` and `entries`, mapping each ID to `kana` and
+`clips` (up to eight distinct speakers). Private clips replace that entry's entire
+public list. A missing or invalid configured manifest fails initialization;
+a missing WAV reports unavailable while visual review stays usable.
+
+Forvo listening/download pages are candidates, not permission to scrape or publish
+their media. This product has no Forvo extractor, paid API or network playback.
 
 `tools/cache_pronunciation.py` is an optional curation tool that accepts an explicit
 kana string and safe asset name. It requires a separately installed

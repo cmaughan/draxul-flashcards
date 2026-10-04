@@ -140,3 +140,98 @@ Unresolved host gates are explicitly transferred to the existing Draxul cards
 `63 joined-family-emoji-fallback -bug.md`, `64 windows-test-scope-selection -bug.md`
 and `65 windows-validation-timing -test.md`. No platform gate is reported as passed
 without execution, and no render references were blessed.
+
+## Native cues and human audio checkpoint, 2026-10-02
+
+Native NanoVG cues now cover the requested それ, が and whole phrase いいね.
+The English guide explains them one at a time before reviews and persists its
+acknowledgment independently from SRS. The production grammar chip is blank;
+the back reveals が immediately after それ. Known-only diagram dependencies are
+validated at generation and parse time. The actual journal currently produces
+six word records / twelve independent directions, without private meanings,
+conversation details or journal review data in the generated deck.
+
+Initial configure/build succeeded in 95.60 s combined (phases not separately
+measured). The core/product aggregate passed 56/60 entries in 150.85 s: model,
+generator and standard packaged review passed. Native-cue capture failed on a
+reveal deadline; an iteration found old log diagnostics could satisfy readiness
+before a fresh child rendered. Exact prior log/bitmap files are now removed before
+launch. Another run reached the host's "Failed to capture screenshot" diagnostic.
+These failures were retained, not counted as passes.
+
+The initial core failures were joined-family emoji composition, Windows scope
+selection and a remote-terminal initial-state deadline. Other chats own active
+core changes and their follow-ups; this product does not change those systems.
+
+The user then requested human audio and speaker cycling. Source/language/licence
+evidence, actual coverage and quality limits live in [audio-coverage.md](audio-coverage.md).
+The human recordings are complete cached words, with no pitch/speed/trim edits.
+Private audio is configured at runtime outside the package and generated headers;
+missing human clips never silently substitute synthetic audio. Reveal, replay,
+speaker switching and help do not write review success.
+
+Windows packaged tests use SDL's dummy audio driver. No subjective listening,
+speaker-native assessment or user pronunciation evidence is inferred. macOS/Metal
+execution is unavailable on this host. New audio implementation remains uncommitted;
+another root chat published the earlier cue/capture checkpoint while this slice
+was still being implemented.
+
+## Final human-audio handoff, 2026-10-02
+
+| Gate | Result and measured cost |
+|---|---|
+| Debug configure/build before core/product aggregate | Passed, 138.32 s combined; phases not separately measured. |
+| Core + Flashcards aggregate | 58/61 CTest entries passed, 246.00 s (runner 246.19 s). All five product groups passed; three core failures remained: joined emoji, remote terminal initial state and Windows scope selection. |
+| Focused package-exclusion repeat | Passed, 1/1 in 28.13 s, after strengthening the assertion to inspect every packaged generation. This repeated only the private-audio runtime group. |
+| Final Debug build | Passed, 10 Ninja steps, 23.30 s; no reconfigure. Reset speaker selection on new reveals and stop previous audio when a stale grade returns to a front. |
+| Final product aggregate | Passed, 5/5 in 219.26 s (runner 219.42 s): 14 model cases, five generator cases, nine normal captures, 14 native-cue captures and three private-audio captures. Native cues 121.51 s, normal render 72.07 s, private audio 25.64 s; generator/model overlapped other work. This repeats product coverage after the final code adjustment, without rerunning unrelated core tests. |
+| Standard same-cache Debug smoke | Failed at the 30 s bound, owned PID 53680 stopped by the wrapper; outer elapsed 36.84 s. Existing default-profile host investigation remains open. |
+| Same-cache isolated Flashcards startup | Passed, exit 0 in 2.89 s; fresh temporary APPDATA/LOCALAPPDATA, SDL dummy audio, no user-state changes. This does not replace the failed standard smoke. |
+| Final Release build | Passed, 13 Ninja steps, 123.66 s combined. Ninja regenerated CMake: configure 98.6 s, generate 2.6 s; compilation alone was not separately timed. |
+| Release startup and diagnostic repeat | Initial `do.py run release --console -- --plugin dev.draxul.flashcards --smoke-test` returned 1 after the successful build, with no retained app diagnostic (outer command 125.94 s). A fresh isolated launch of that same Release executable with a retained log passed, exit 0 in 2.95 s, showing Vulkan swapchain and Flashcards frame readiness. No cause is inferred for the first failure. |
+| macOS / audible quality / remote CI | Not executed or claimed. Windows dummy-driver tests verify queueing and selection, not listening quality. Curated clips require human listening review; 2–3 verified native voices and four missing human entries remain open. No remote CI was started for uncommitted changes. |
+
+The host failures are explicitly retained under the existing Draxul cards
+`63 joined-family-emoji-fallback -bug.md`, `64 windows-test-scope-selection -bug.md`
+and `65 windows-validation-timing -test.md` (including remote initial-state and
+default-profile smoke timing). Natural coverage and listening/macOS review stay
+in the pending human-audio card. The diagram implementation is complete. Human
+audio changes, source licences, tests, tracker updates and documentation remain
+uncommitted and unpushed under this slice's instruction.
+
+## Printed-word visual replacement, 2026-10-02
+
+The user approved replacing the conversation cue for ことば with a photograph of
+one printed word. Licensed source and display adaptation are recorded in
+[printed-word-cue.md](printed-word-cue.md). The first capture showed the outline
+clipping the bottom half of the text; user feedback confirmed it. The display
+focus/angle and outline height were corrected. Rebuilt front and back were then
+inspected at actual 900x760 card size: complete letters/punctuation and padding
+fit inside the outline. Production shows no target kana or English translation.
+The card back retains human playback and source credits. Two capture iterations
+(four captures total) used temporary state and confirmed reveal preserved its bytes;
+capture durations were not separately measured.
+
+| Gate | Result and measured cost |
+|---|---|
+| Visual iteration builds | First build: 10 steps, passed, elapsed not retained separately. Corrected build: 10 steps, passed in 13.56 s. No reconfigure. |
+| Product aggregate build | Passed, eight check/staging steps, 13.25 s; no reconfigure and no compilation needed after the corrected visual build. |
+| Product aggregate | Passed, 5/5 CTest groups, 194.53 s (runner 194.66 s). Model 0.20 s, generator 2.27 s, 14 native captures 107.08 s, nine normal captures 64.47 s, three private-audio captures 22.96 s. Model/generator overlap other tests. |
+| Standard same-cache Debug smoke | Passed, outer 27.79 s. Prior timeouts remain historical failures; this pass does not establish their cause or fix. |
+| Final Release | Passed: ten build steps, 13.34 s, no reconfigure; isolated plugin startup exited 0 with swapchain/frame readiness logged. Outer build/startup 15.48 s; startup alone not separately timed. |
+| macOS / remote CI / broader core inventory | Not repeated for this product visual change. Cross-platform NanoVG path is shared. Existing core failures are not claimed resolved. No CI triggered for uncommitted work. |
+
+The completed photographic slice and the earlier human-audio implementation
+remain uncommitted/unpushed. Real schedules, stable IDs, audio selections and
+conversational learning files were preserved.
+
+## Publication, 2026-10-04
+
+The user explicitly requested committing and pushing all pending work. This
+supersedes the earlier instructions to retain these slices uncommitted. Publish
+the licensed human audio, speaker selection/private-cache support, corrected
+printed-word cue, provenance, tests and tracker updates together. The validation
+above remains the evidence for the unchanged implementation; no redundant build
+or tests are required for this Git-only publication. Missing natural-speaker
+coverage and human listening/macOS review stay pending in the human-audio card.
+Generated personal decks, private caches, binaries and screenshots remain ignored.

@@ -37,10 +37,10 @@ class GeneratorBoundary(unittest.TestCase):
         payload = json.dumps(deck, ensure_ascii=False)
         for private in ("PRIVATE_CONTEXT", "PRIVATE_TIME", "PRIVATE_GUIDE", "meaning", str(self.root)):
             self.assertNotIn(private, payload)
-        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution", "audio", "audio_attribution", "cue", "cue_subject"})
-        self.assertEqual(deck["schema_version"], 3)
+        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution", "audio", "cue", "cue_subject"})
+        self.assertEqual(deck["schema_version"], 4)
         self.assertEqual(deck["kind"], "bidirectional")
-        self.assertTrue(all(c["audio"].endswith(".wav") for c in deck["cards"]))
+        self.assertTrue(all(c["audio"] and all(a["file"].endswith(".wav") for a in c["audio"]) for c in deck["cards"]))
         self.assertEqual({c["kana"] for c in deck["cards"]}, {"りんご", "ロボット", "それ", "が", "いいね"})
         self.assertTrue(embed.generate(self.source, self.art, self.output))
         stamp = self.output.stat().st_mtime_ns
@@ -61,7 +61,7 @@ class GeneratorBoundary(unittest.TestCase):
             self.assertEqual(card["cue"], cue)
             self.assertEqual(card["image"], "")
             self.assertTrue(card["attribution"])
-            with wave.open(str(ROOT / "assets" / card["audio"]), "rb") as audio:
+            with wave.open(str(ROOT / "assets" / card["audio"][0]["file"]), "rb") as audio:
                 self.assertEqual(audio.getnchannels(), 1)
                 self.assertEqual(audio.getsampwidth(), 2)
                 self.assertEqual(audio.getframerate(), 48000)
@@ -71,6 +71,42 @@ class GeneratorBoundary(unittest.TestCase):
         self.write()
         with self.assertRaisesRegex(ValueError, "outside this deck"):
             embed.build_deck(self.source, self.art)
+
+    def test_human_clip_selection_and_public_package_boundary(self):
+        import hashlib
+        art = json.loads(self.art.read_text(encoding="utf8"))
+        self.doc["words"] += [{"id":"fixture-kotoba", "kana":"ことば", "romaji":"kotoba", "meaning":"word"},
+                              {"id":"fixture-asa", "kana":"あさ", "romaji":"asa", "meaning":"morning"}]
+        self.write()
+        cards = {c["kana"]: c for c in embed.build_deck(self.source, self.art)["cards"]}
+        self.assertEqual(len(cards["あさ"]["audio"]), 2)
+        self.assertTrue(all(not c["synthetic"] for c in cards["あさ"]["audio"]))
+        self.assertFalse(cards["ことば"]["audio"][0]["synthetic"])
+        for kana in ("それ", "が", "いいね"):
+            self.assertTrue(cards[kana]["audio"][0]["synthetic"])
+        public_files = {a["file"] for a in art["audio"].values()}
+        self.assertEqual(public_files, {f.name for f in (ROOT/"assets").glob("*.wav")})
+        for clip in art["audio"].values():
+            self.assertEqual(clip["sha256"], hashlib.sha256((ROOT/"assets"/clip["file"]).read_bytes()).hexdigest())
+            self.assertNotIn("personal-use", clip["license"])
+        changed = copy.deepcopy(art)
+        changed["audio_by_kana"]["あさ"].append("asa")
+        isolated_assets = self.root / "assets"
+        isolated_assets.mkdir()
+        for file in (ROOT/"assets").glob("*.wav"):
+            shutil.copyfile(file, isolated_assets/file.name)
+        changed_path = isolated_assets/"artwork.json"
+        try:
+            changed_path.write_text(json.dumps(changed),encoding="utf8")
+            with self.assertRaisesRegex(ValueError,"mix synthetic"):
+                embed.build_deck(self.source, changed_path)
+            changed = copy.deepcopy(art)
+            changed["audio"]["asa-tofugu"]["license"] = "personal-use-only"
+            changed_path.write_text(json.dumps(changed),encoding="utf8")
+            with self.assertRaisesRegex(ValueError,"bundling license"):
+                embed.build_deck(self.source, changed_path)
+        finally:
+            changed_path.unlink(missing_ok=True)
 
     def test_invalid_sources_preserve_previous_output(self):
         embed.generate(self.source, self.art, self.output)

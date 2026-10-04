@@ -1,12 +1,12 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "assets": {
-    "conversation": {
-      "file": "conversation.jpg",
-      "source": "https://commons.wikimedia.org/wiki/File:Casual_conversation.jpg",
-      "license": "CC-BY-4.0",
-      "attribution": "Cashinondt / Wikimedia Commons - CC BY 4.0",
-      "changes": "Original unchanged; aspect-fit display"
+    "printed-word": {
+      "file": "printed-word.png",
+      "source": "https://commons.wikimedia.org/wiki/File:Words_on_a_Page.png",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Kasharp / Wikimedia Commons - CC BY-SA 4.0; display crop and outline",
+      "changes": "Original 2448x3264 PNG unchanged. Renderer rotates/crops around one printed word, fades surrounding text and adds a gold outline; photographic display composition offered under CC BY-SA 4.0. No target kana or translation added."
     },
     "morning": {
       "file": "morning-wakeup.jpg",
@@ -38,7 +38,7 @@
     }
   },
   "by_kana": {
-    "ことば": "conversation",
+    "ことば": "printed-word",
     "エージェント": "assistant",
     "あさ": "morning",
     "りんご": "apple",
@@ -51,67 +51,149 @@
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "6b43ce791306446781a1fae939b23adb0365c0510dd941e241111a38a103490e"
     },
     "ejento": {
       "file": "ejento.wav",
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "49f7b2ebac6df984acc705e5bff4d7cd68245d0d2acdde8080b97ab22e377d63"
     },
     "asa": {
       "file": "asa.wav",
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "9f4025d971ca8ba782103293cad51593fc4e9cb417db51752a29cc1334a66781"
     },
     "ringo": {
       "file": "ringo.wav",
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "844ac84fb4c2f4207abc5dace25f1d56c48c71a73471a3389d243e3326dbed4b"
     },
     "robotto": {
       "file": "robotto.wav",
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "5f2b7e45c949bbf1bcd59bcb2a5453cb8d198079d2ea5a75a7f521f787e84a4e"
     },
     "sore": {
       "file": "sore.wav",
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "0da71964a7c2fcbbc07f05697bc6e5d4e4a1d9d12da62765cd1c4fd355f267f4"
     },
     "ga": {
       "file": "ga.wav",
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "4234711f6f2f726be6bd163b673aa9aefb7e23d4b0a00add52dba21a954452b2"
     },
     "ii-ne": {
       "file": "ii-ne.wav",
       "source": "https://github.com/tsukumijima/pyopenjtalk-plus/blob/v0.4.1-post9/pyopenjtalk/htsvoice/LICENSE_mei_normal.htsvoice",
       "license": "CC-BY-3.0",
       "attribution": "Mei voice / MMDAgent, Nagoya Institute of Technology - CC BY 3.0",
-      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16"
+      "changes": "Synthetic kana pronunciation; pyopenjtalk-plus 0.4.1.post9, mono 48 kHz PCM16",
+      "speaker": "Mei synthetic voice",
+      "synthetic": true,
+      "quality": "Synthetic fallback; human recording coverage missing. Not a native recording or pitch-accent assessment.",
+      "sha256": "ca81c54029ba28dea82a9e2f2c7ec81c1431473eecb04ee52105953142bd9fb3"
+    },
+    "kotoba-tofugu": {
+      "file": "kotoba-tofugu.wav",
+      "source": "https://raw.githubusercontent.com/tofugu/japanese-vocabulary-pronunciation-audio/9725e0e7d628ab616e8b14e126d3daa33eba8d36/lib/ogg/%E8%A8%80%E8%91%89%E3%80%90%E3%81%93%E3%81%A8%E3%81%B0%E3%80%91.ogg",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Tofugu and WaniKani - CC BY-SA 4.0",
+      "changes": "Complete original word; Ogg decoded to mono 48 kHz PCM16. No trimming, pitch, speed or gain edits.",
+      "speaker": "Tofugu archive voice",
+      "synthetic": false,
+      "quality": "Publisher identifies archive voices as native Japanese. File-level voice identity/accent unspecified. Signal checked; auditory assessment unavailable.",
+      "sha256": "fd4645a46406faa5075462ad0c1f7ad89eb6c043f023825c4be3b6044f34b9c2"
+    },
+    "asa-tofugu": {
+      "file": "asa-tofugu.wav",
+      "source": "https://raw.githubusercontent.com/tofugu/japanese-vocabulary-pronunciation-audio/9725e0e7d628ab616e8b14e126d3daa33eba8d36/lib/ogg/%E6%9C%9D%E3%80%90%E3%81%82%E3%81%95%E3%80%91.ogg",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Tofugu and WaniKani - CC BY-SA 4.0",
+      "changes": "Complete original word; Ogg decoded to mono 48 kHz PCM16. No trimming, pitch, speed or gain edits.",
+      "speaker": "Tofugu archive voice",
+      "synthetic": false,
+      "quality": "Publisher identifies archive voices as native Japanese. File-level voice identity/accent unspecified. Signal checked; auditory assessment unavailable.",
+      "sha256": "6e37f37c4162aa0d75876ce1efe97144b5e88a132f4ec4983c03fd0c1911243d"
+    },
+    "asa-ckali": {
+      "file": "asa-ckali.wav",
+      "source": "https://commons.wikimedia.org/wiki/File:LL-Q5287_(jpn)-CKali-%E3%81%82%E3%81%95.wav",
+      "license": "CC0-1.0",
+      "attribution": "CKali / Lingua Libre - CC0",
+      "changes": "Original WAV unchanged. Complete isolated word, no trimming or concatenation.",
+      "speaker": "CKali",
+      "synthetic": false,
+      "quality": "Japanese transcription and named speaker stated by source. Native status and gender unverified. Signal checked; auditory assessment unavailable.",
+      "sha256": "ea93dbbd74e1c72c26882cec0c6b7bad2c609a1acfe39143b95ed8c421b93fd4"
     }
   },
   "audio_by_kana": {
-    "ことば": "kotoba",
-    "エージェント": "ejento",
-    "あさ": "asa",
-    "りんご": "ringo",
-    "ロボット": "robotto",
-    "それ": "sore",
-    "が": "ga",
-    "いいね": "ii-ne"
+    "ことば": [
+      "kotoba-tofugu"
+    ],
+    "エージェント": [
+      "ejento"
+    ],
+    "あさ": [
+      "asa-tofugu",
+      "asa-ckali"
+    ],
+    "りんご": [
+      "ringo"
+    ],
+    "ロボット": [
+      "robotto"
+    ],
+    "それ": [
+      "sore"
+    ],
+    "が": [
+      "ga"
+    ],
+    "いいね": [
+      "ii-ne"
+    ]
   },
   "cues": {
     "listener-reference": {

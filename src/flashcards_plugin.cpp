@@ -61,6 +61,8 @@ struct Instance
     double flip_started = 0, flip_duration = 0.58;
     SDL_AudioStream* audio_stream = nullptr;
     std::string audio_status;
+    std::filesystem::path audio_directory;
+    size_t audio_index = 0;
     std::filesystem::path image_directory;
     std::map<std::string, std::string> image_overrides;
     bool frame_ready_logged = false;
@@ -115,7 +117,9 @@ void pronounce(Instance& instance)
     {
         if (card->audio.empty())
             throw std::runtime_error("No cached pronunciation");
-        const auto bytes = read_asset(instance.services.plugin_directory() / "assets" / card->audio, 2 * 1024 * 1024);
+        const auto& clip = card->audio.at(instance.audio_index);
+        const auto bytes = read_asset((clip.private_cache ? instance.audio_directory
+            : instance.services.plugin_directory() / "assets") / clip.file, 2 * 1024 * 1024);
         if (!instance.audio_initialized)
         {
             if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) throw std::runtime_error("Audio device unavailable");
@@ -133,8 +137,13 @@ void pronounce(Instance& instance)
         if (!instance.audio_stream || !SDL_PutAudioStreamData(instance.audio_stream, samples, static_cast<int>(size))
             || !SDL_FlushAudioStream(instance.audio_stream) || !SDL_ResumeAudioStreamDevice(instance.audio_stream))
             throw std::runtime_error("Pronunciation playback failed");
-        instance.audio_status = "Synthetic pronunciation  /  R to replay";
+        instance.audio_status = (clip.synthetic ? "Synthetic fallback" : "Human recording")
+            + std::string("  /  ") + clip.speaker
+            + (card->audio.size() > 1 ? "  /  " + std::to_string(instance.audio_index + 1)
+                + " of " + std::to_string(card->audio.size()) : "");
         instance.services.log(DRAXUL_PLUGIN_LOG_DEBUG, "Flashcards pronunciation queued after reveal");
+        instance.services.log(DRAXUL_PLUGIN_LOG_DEBUG, "Flashcards pronunciation clip="
+            + std::to_string(instance.audio_index) + " synthetic=" + std::to_string(clip.synthetic));
     }
     catch (...)
     {
@@ -178,23 +187,35 @@ void act(Instance& instance, std::string_view action)
     if (instance.flipping) return;
     if (action == "flip" && instance.review->current() && !instance.review->revealed())
     {
+        instance.audio_index = 0;
         instance.flip_started = steady_seconds();
         instance.flipping = true;
         instance.services.request_tick();
     }
     else if (action == "replay") pronounce(instance);
+    else if (action == "another-speaker" && instance.review->revealed() && instance.review->current())
+    {
+        const auto count = instance.review->current()->audio.size();
+        if (count > 1)
+        {
+            instance.audio_index = flashcards::next_audio_index(instance.audio_index, count);
+            pronounce(instance);
+        }
+    }
     else if (action == "remembered" || action == "again")
     {
-        if (instance.review->grade(action == "remembered"))
+        if (instance.review->grade(action == "remembered") || !instance.review->revealed())
         {
             stop_audio(instance);
             instance.audio_status.clear();
+            instance.audio_index = 0;
         }
     }
     else if (action == "skip" || action == "refresh")
     {
         stop_audio(instance);
         instance.audio_status.clear();
+        instance.audio_index = 0;
         if (action == "skip") instance.review->skip();
         else instance.review->start_batch();
     }
@@ -274,6 +295,29 @@ void picture(NVGcontext* vg, int handle, float x, float y, float w, float h)
     nvgRoundedRect(vg, x, y, shown_w, shown_h, 12);
     nvgFillPaint(vg, nvgImagePattern(vg, x, y, shown_w, shown_h, 0, handle, 1));
     nvgFill(vg);
+}
+void printed_word_scene(NVGcontext* vg, int handle, float x, float y, float w, float h)
+{
+    // Keep an actual printed word sharp; never draw the card's answer into the cue.
+    // Source pixels stay unchanged. This photographic display adaptation is CC BY-SA 4.0.
+    const float unit = std::min(w / 600, h / 320);
+    nvgSave(vg); nvgTranslate(vg, x + w / 2, y + h / 2); nvgScale(vg, unit, unit);
+    rect(vg, -280, -140, 560, 280, nvgRGB(239, 230, 209), 16);
+    nvgIntersectScissor(vg, -280, -140, 560, 280);
+    nvgSave(vg);
+    nvgRotate(vg, -0.85f);
+    constexpr float scale = 0.92f;
+    const float px = -1275 * scale, py = -3060 * scale;
+    nvgBeginPath(vg); nvgRect(vg, px, py, 2448 * scale, 3264 * scale);
+    nvgFillPaint(vg, nvgImagePattern(vg, px, py, 2448 * scale, 3264 * scale, 0, handle, 1));
+    nvgFill(vg); nvgRestore(vg);
+    nvgBeginPath(vg); nvgRect(vg, -280, -140, 560, 280);
+    nvgRoundedRect(vg, -101, -48, 202, 96, 9); nvgPathWinding(vg, NVG_HOLE);
+    nvgFillColor(vg, nvgRGBA(247, 242, 228, 205)); nvgFill(vg);
+    nvgBeginPath(vg); nvgRoundedRect(vg, -101, -48, 202, 96, 9);
+    nvgFillColor(vg, nvgRGBA(255, 211, 89, 25)); nvgFill(vg);
+    nvgStrokeColor(vg, nvgRGB(193, 133, 26)); nvgStrokeWidth(vg, 3); nvgStroke(vg);
+    nvgRestore(vg);
 }
 void morning_scene(NVGcontext* vg, int handle, float x, float y, float w, float h)
 {
@@ -433,6 +477,8 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
                         software_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
                     else if (!custom && image_name == "morning-wakeup.jpg")
                         morning_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
+                    else if (!custom && image_name == "printed-word.png")
+                        printed_word_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
                     else picture(vg, handle, left + 24, image_y, panel - 48, image_h);
                 }
                 else paragraph(vg, left + 36, 248, panel - 72, 19, "Picture unavailable. Add a personal image or skip this review.", nvgRGB(91, 110, 130));
@@ -442,7 +488,13 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
                     label(vg, width / 2, 350, size, card->kana, ink, NVG_ALIGN_CENTER);
                     label(vg, width / 2, 404, 16, card->romaji, nvgRGB(96, 114, 132), NVG_ALIGN_CENTER);
                     if (!instance.flipping && !card->audio.empty())
-                        button(instance, vg, width / 2 - 102, 443, 204, "R  Replay pronunciation", "replay", nvgRGB(52, 86, 119));
+                    {
+                        const bool multiple = card->audio.size() > 1;
+                        button(instance, vg, width / 2 - (multiple ? 216 : 102), 443, 204,
+                            "R  Replay pronunciation", "replay", nvgRGB(52, 86, 119));
+                        if (multiple) button(instance, vg, width / 2 + 12, 443, 204,
+                            "N  Another speaker", "another-speaker", nvgRGB(52, 86, 119));
+                    }
                     if (!instance.flipping)
                         label(vg, width / 2, 496, 11, instance.audio_status, nvgRGB(99, 116, 134), NVG_ALIGN_CENTER);
                 }
@@ -469,7 +521,9 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
         if (instance.review->revealed() && !instance.flipping)
         {
             const auto credit = custom ? std::string("Personal picture") : card->attribution;
-            paragraph(vg, left, 598, panel, 10, credit + (card->audio_attribution.empty() ? "" : "\n" + card->audio_attribution), muted);
+            const auto audio_credit = card->audio.empty() ? std::string()
+                : "\n" + card->audio.at(instance.audio_index).attribution;
+            paragraph(vg, left, 598, panel, 10, credit + audio_credit, muted);
         }
         else label(vg, width / 2, 603, 13, production ? "Recall the Japanese word. Reveal when ready." : "Recall the meaning. Reveal when ready.", muted, NVG_ALIGN_CENTER);
     }
@@ -527,6 +581,17 @@ void* create(const DraxulPluginCreateInfoV2* info)
                     instance->image_overrides.emplace(id, file);
                 }
             }
+            else if (name == "audio_directory")
+            {
+                if (!value.is_string()) throw std::runtime_error("Invalid audio directory");
+                instance->audio_directory = std::filesystem::path(value.get<std::string>());
+                if (!instance->audio_directory.is_absolute()) throw std::runtime_error("Audio directory must be absolute");
+                instance->audio_directory = std::filesystem::weakly_canonical(instance->audio_directory);
+                const auto plugin = std::filesystem::weakly_canonical(instance->services.plugin_directory());
+                const auto relative = instance->audio_directory.lexically_relative(plugin);
+                if (!relative.empty() && *relative.begin() != "..")
+                    throw std::runtime_error("Private audio must be outside the package directory");
+            }
             else if (name == "flip_duration_ms")
             {
                 if (!value.is_number_integer()) throw std::runtime_error("Invalid flip duration");
@@ -541,6 +606,15 @@ void* create(const DraxulPluginCreateInfoV2* info)
         instance->pass = create_plugin_nanovg_pass({ instance->services.plugin_directory() });
         auto* raw = instance.get();
         auto cards = flashcards::parse_deck(flashcards::embedded::deck);
+        if (!instance->audio_directory.empty())
+        {
+            const auto bytes = read_asset(instance->audio_directory / "manifest.json", 1024 * 1024);
+            const auto overrides = flashcards::parse_private_audio(
+                std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()), cards);
+            for (auto& card : cards)
+                if (const auto found = overrides.find(card.id); found != overrides.end())
+                    card.audio = found->second; // Explicit private selection never silently falls back.
+        }
         std::set<flashcards::VisualCue> examples;
         for (const auto& card : cards)
             if (card.cue != flashcards::VisualCue::Picture && examples.insert(card.cue).second)
@@ -631,6 +705,7 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
         {
         case 32: act(i, "flip"); break;
         case 'r': case 'R': act(i, "replay"); break;
+        case 'n': case 'N': act(i, "another-speaker"); break;
         case 'h': case 'H': case '?': act(i, "help"); break;
         case '1': act(i, "again"); break;
         case '2': act(i, "remembered"); break;
@@ -720,7 +795,7 @@ int32_t dispatch(void* opaque, const char* id, size_t length)
     const auto action = std::string_view(id, length);
     if (action != "flip" && action != "replay" && action != "remembered"
         && action != "again" && action != "refresh" && action != "skip"
-        && action != "help" && action != "close-guide")
+        && action != "help" && action != "close-guide" && action != "another-speaker")
         return 0;
     act(*static_cast<Instance*>(opaque), std::string_view(id, length));
     return 1;
@@ -728,7 +803,8 @@ int32_t dispatch(void* opaque, const char* id, size_t length)
 constexpr AdapterAction actions[] = {
     { "flip", "Reveal flashcard" }, { "replay", "Replay pronunciation" },
     { "remembered", "Remembered" }, { "again", "Again" }, { "skip", "Skip flashcard" },
-    { "refresh", "Check due reviews" }, { "help", "Explain card cues" }, { "close-guide", "Continue to reviews" }
+    { "refresh", "Check due reviews" }, { "help", "Explain card cues" }, { "close-guide", "Continue to reviews" },
+    { "another-speaker", "Hear another speaker" }
 };
 using Presentation = PresentationAdapter<actions, presentation, dispatch>;
 const auto api = make_plugin_api({ "dev.draxul.flashcards", "Flashcards", "0.1.0" },
