@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
@@ -26,6 +27,15 @@ struct Card
     Direction direction = Direction::Recognition;
     VisualCue cue = VisualCue::Picture;
     std::string cue_subject;
+    std::string meaning;
+};
+
+struct QueuedCard
+{
+    const Card* card = nullptr;
+    int64_t due = 0;
+    bool due_now = false;
+    bool current = false;
 };
 
 struct Progress
@@ -67,11 +77,18 @@ public:
     size_t due_count() const;
     size_t deck_size() const { return cards_.size(); }
     std::optional<int64_t> next_due() const;
+    // Read-only schedule: eligible relearning, reviewed, then new cards;
+    // future cards follow by effective due time. Deck order breaks ties.
+    // Includes the current card first; no recall state changes by inspecting it.
+    std::vector<QueuedCard> queue() const;
     bool image_ready() const { return image_ready_; }
     bool batch_finished() const { return batch_grades_ >= 20; }
+    size_t remaining_grades() const { return static_cast<size_t>(std::max(0, 20 - batch_grades_)); }
     void set_image_ready(bool ready) { image_ready_ = ready; }
 private:
     void select();
+    std::vector<size_t> ordered_indices(int64_t now) const;
+    int64_t eligible_due(const Card& card, const State& state) const;
     std::string key(const Card& card) const;
     std::vector<Card> cards_;
     State state_;

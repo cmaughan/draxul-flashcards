@@ -94,20 +94,24 @@ int64_t unix_now()
 std::vector<Card> parse_deck(std::string_view text)
 {
     const auto doc = bounded_json(text);
-    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 4) != 4
+    if (!doc.is_object() || doc.size() != 3 || integer(doc, "schema_version", 5) != 5
         || doc.at("kind") != "bidirectional" || !doc.at("cards").is_array() || doc.at("cards").size() > 2000)
         throw std::runtime_error("Unsupported embedded deck");
     std::vector<Card> cards;
     std::set<std::string> ids;
     for (const auto& value : doc.at("cards"))
     {
-        if (!value.is_object() || value.size() != 8)
+        if (!value.is_object() || value.size() != 9)
             throw std::runtime_error("Invalid embedded card");
         Card card{ value.at("id").get<std::string>(), value.at("kana").get<std::string>(),
             value.at("romaji").get<std::string>(), value.at("image").get<std::string>(),
             value.at("attribution").get<std::string>(), parse_clips(value.at("audio"), false) };
         const auto cue = value.at("cue").get<std::string>();
         card.cue_subject = value.at("cue_subject").get<std::string>();
+        card.meaning = value.at("meaning").get<std::string>();
+        if (card.meaning.empty() || card.meaning.size() > 512
+            || std::any_of(card.meaning.begin(), card.meaning.end(), [](unsigned char c) { return c < 32 || c == 127; }))
+            throw std::runtime_error("Invalid answer description");
         if (cue == "picture") card.cue = VisualCue::Picture;
         else if (cue == "listener-reference") card.cue = VisualCue::ListenerReference;
         else if (cue == "subject-marker") card.cue = VisualCue::SubjectMarker;
@@ -222,6 +226,8 @@ void ReviewSession::refresh()
         state_ = text ? parse_state(*text) : State{};
         blocked_ = false;
         error_.clear();
+        if (current_ && eligible_due(cards_[*current_], state_) > clock_())
+            current_.reset();
         if (!current_)
             select();
     }
@@ -239,20 +245,78 @@ void ReviewSession::select()
     revealed_ = image_ready_ = false;
     if (batch_finished())
         return;
-    int64_t earliest = max_time;
-    for (size_t i = 0; i < cards_.size(); ++i)
+    const auto now = clock_();
+    for (size_t i : ordered_indices(now))
     {
-        if (std::find(skipped_.begin(), skipped_.end(), key(cards_[i])) != skipped_.end())
-            continue;
         const auto entry = state_.find(key(cards_[i]));
-        const auto due = entry == state_.end() ? 0 : entry->second.due;
-        if (due <= clock_() && (!current_ || due < earliest))
+        const auto due = eligible_due(cards_[i], state_);
+        if (due <= now)
         {
-            earliest = due;
             current_ = i;
             expected_reviews_ = entry == state_.end() ? 0 : entry->second.reviews;
+            break;
         }
     }
+}
+
+int64_t ReviewSession::eligible_due(const Card& card, const State& state) const
+{
+    const auto entry = state.find(key(card));
+    int64_t due = entry == state.end() ? 0 : entry->second.due;
+    // A grade exposes the same answer in either direction. Derive the shared
+    // cooldown from durable records without changing either direction's due.
+    for (const auto* direction : { "recognition:", "production:" })
+    {
+        const auto other = state.find(direction + card.id);
+        if (other != state.end() && other->second.reviews > 0)
+            due = std::max(due, other->second.last_reviewed + 600);
+    }
+    return due;
+}
+
+std::vector<size_t> ReviewSession::ordered_indices(int64_t now) const
+{
+    std::vector<size_t> indices;
+    for (size_t i = 0; i < cards_.size(); ++i)
+        if (std::find(skipped_.begin(), skipped_.end(), key(cards_[i])) == skipped_.end())
+            indices.push_back(i);
+    const auto due = [&](size_t i) {
+        return eligible_due(cards_[i], state_);
+    };
+    const auto priority = [&](size_t i) {
+        const auto entry = state_.find(key(cards_[i]));
+        if (entry == state_.end() || entry->second.reviews == 0) return 2;
+        // Again resets stage to zero; one explicit Remembered clears priority.
+        return entry->second.stage == 0 && entry->second.forgotten > 0 ? 0 : 1;
+    };
+    std::stable_sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
+        const auto a_due = due(a), b_due = due(b);
+        const bool a_ready = a_due <= now, b_ready = b_due <= now;
+        if (a_ready != b_ready) return a_ready;
+        if (a_ready && priority(a) != priority(b)) return priority(a) < priority(b);
+        return a_due < b_due;
+    });
+    return indices;
+}
+
+std::vector<QueuedCard> ReviewSession::queue() const
+{
+    std::vector<QueuedCard> result;
+    if (blocked_) return result;
+    const auto now = clock_();
+    auto indices = ordered_indices(now);
+    // The shown card stays first even if the clock crosses another due boundary.
+    if (current_)
+    {
+        const auto found = std::find(indices.begin(), indices.end(), *current_);
+        if (found != indices.end()) std::rotate(indices.begin(), found, found + 1);
+    }
+    for (const auto i : indices)
+    {
+        const int64_t due = eligible_due(cards_[i], state_);
+        result.push_back({ &cards_[i], due, due <= now, current_ && i == *current_ });
+    }
+    return result;
 }
 bool ReviewSession::flip()
 {
@@ -285,14 +349,14 @@ bool ReviewSession::grade(bool remembered)
         State next = text ? parse_state(*text) : State{};
         const auto card_key = key(*current());
         auto& p = next[card_key];
-        if (p.reviews != expected_reviews_ || p.due > clock_())
+        const auto now = clock_();
+        if (p.reviews != expected_reviews_ || eligible_due(*current(), next) > now)
         {
             state_ = std::move(next);
             select();
             error_ = "This card was already graded in another pane. Its saved schedule was kept.";
             return false;
         }
-        const auto now = clock_();
         if (now < 0 || now > max_time - 30 * 86400)
             throw std::runtime_error("Clock outside bounds");
         ++p.reviews;
@@ -325,19 +389,20 @@ bool ReviewSession::grade(bool remembered)
 }
 size_t ReviewSession::due_count() const
 {
+    if (blocked_) return 0;
+    const auto now = clock_();
     return std::count_if(cards_.begin(), cards_.end(), [&](const Card& card) {
-        const auto entry = state_.find(key(card));
-        return entry == state_.end() || entry->second.due <= clock_();
+        return eligible_due(card, state_) <= now;
     });
 }
 std::optional<int64_t> ReviewSession::next_due() const
 {
     std::optional<int64_t> result;
+    if (blocked_) return result;
     for (const auto& card : cards_)
     {
-        const auto entry = state_.find(key(card));
-        if (entry != state_.end() && (!result || entry->second.due < *result))
-            result = entry->second.due;
+        const auto due = eligible_due(card, state_);
+        if (!result || due < *result) result = due;
     }
     return result;
 }

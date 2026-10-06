@@ -29,7 +29,7 @@ inline void person(NVGcontext* vg, float x, NVGcolor color)
     line(vg, x - 12, 52, x - 17, 90, color, 9);
     line(vg, x + 12, 52, x + 17, 90, color, 9);
 }
-inline void draw(NVGcontext* vg, const Card& card, bool back, float x, float y, float w, float h)
+inline void draw(NVGcontext* vg, const Card& card, bool back, float x, float y, float w, float h, bool preview = false)
 {
     const auto ink = nvgRGB(34, 53, 73), blue = nvgRGB(63, 120, 181);
     const auto violet = nvgRGB(132, 90, 168), gold = nvgRGB(242, 184, 62);
@@ -60,9 +60,10 @@ inline void draw(NVGcontext* vg, const Card& card, bool back, float x, float y, 
     {
         // A highlighted expression followed immediately by its attached marker.
         box(vg, -205, -37, 195, 82, gold, 12);
-        text(vg, -107, 3, 38, card.cue_subject, ink);
+        if (!preview) text(vg, -107, 3, 38, card.cue_subject, ink);
+        else person(vg, -107, ink);
         box(vg, -10, -37, 94, 82, nvgRGB(161, 213, 202), 10);
-        if (back) text(vg, 37, 3, 38, card.kana, ink);
+        if (back && !preview) text(vg, 37, 3, 38, card.kana, ink);
         box(vg, 115, -37, 97, 82, nvgRGB(216, 222, 229), 12);
         text(vg, 163, 3, 32, "…", nvgRGB(133, 150, 169));
         line(vg, -191, 61, -24, 61, nvgRGB(177, 131, 35), 4);

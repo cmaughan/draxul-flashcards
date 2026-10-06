@@ -235,3 +235,69 @@ above remains the evidence for the unchanged implementation; no redundant build
 or tests are required for this Git-only publication. Missing natural-speaker
 coverage and human listening/macOS review stay pending in the human-audio card.
 Generated personal decks, private caches, binaries and screenshots remain ignored.
+
+## Upcoming cues, current deck and repeat policy, 2026-10-06
+
+The private build input produces nine words/eighteen directions. New licensed
+photo/list/calendar cues and two human clips are described in `audio-coverage.md`.
+English meaning is intentionally included in strict deck schema 5 and displayed
+only after reveal. Queue images have no answer text; the subject preview replaces
+the known Japanese label with a person. Recall schema 1 and all directional IDs
+remain unchanged. Screenshots/capture state use isolated temporary APPDATA and
+stay in the ignored Debug tree. User review progress is untouched.
+
+The final feedback adds a 600-second cooldown across both directions, derived
+from the latest durable word grade, and due-only priority for current relearning
+before reviewed/new cards. Remembered clears that priority. Independent stored
+due/stage/counters remain intact; passive actions write no recall. Future cards
+are never pulled forward. Small decks can pause, and review backlogs can delay new
+cards. Model tests cover opposite panes, reopen/rebuild, same-word-only waiting,
+599/600-second expiry, explicit grades, priority recovery and due-count/queue
+consistency. Native captures seed an expired timestamp to inspect an opposite
+face without a ten-minute test sleep; they do not change real user state.
+
+| Gate | Result and measured cost |
+|---|---|
+| Initial focused model/generator iteration | Model: 441 assertions/15 cases passed in 0.25 s, build 32.24 s; six generator cases passed in 2.527 s. |
+| Initial Debug package build | Passed, 98.83 s combined: CMake configure 80.7 s, generate 2.3 s; 13 incremental Ninja steps, compilation not separately timed. |
+| Initial six-group aggregate before repeat-policy feedback | Passed 6/6 in 245.63 s (runner 245.78 s), build/check staging 14.72 s. Model 0.22 s, generator 2.23 s; native cues 109.28 s, normal render 66.21 s, audio 23.41 s, queue 46.70 s. |
+| Repeat-policy focused diagnosis | 15/17 cases passed (458/460 assertions), 0.23 s; outer build/test 17.54 s. New cooldown/priority cases passed; two earlier opposite-direction fixture expectations were corrected. |
+| Aggregate after repeat-policy feedback | 5/6 passed in 277.67 s (runner 277.81 s, outer build/test 294.45 s). Build 16.20 s, ten incremental/check/staging steps; no reconfigure. Normal render used an obsolete immediate-opposite-face assumption and failed; native 134.36 s, queue 69.58 s, audio 23.09 s, model 0.28 s and generator 2.28 s passed. The isolated face fixture now expires the cooldown and holds other new cards in the future. |
+| Post-sync build attempts | Initial aggregate build failed in 125.87 s (outer 126.10 s); configure 72.2 s, generate 1.9 s, MSVC/Catch2 JSON-versus-string_view overload failure in upstream agent_protocol_tests.cpp:125. An initial adjustment targeted the following boolean line and repeated the same error in 17.33 s; that adjustment was reverted. The status assertion now compares extracted std::string values. These build failures did not run CTest. |
+| Final post-sync aggregate | Passed 6/6 in 288.84 s (runner 288.97 s; outer build/test 322.90 s). Incremental build passed in 33.42 s, fifty remaining Ninja steps, no reconfigure. Model 0.26 s, generator 2.51 s, normal render 65.26 s, native cues 131.05 s, queue including three new cue backs 69.44 s, audio 23.07 s. |
+| Standard same-cache Debug smoke | Timed out at 30 s; wrapper stopped owned PID 47340, outer 34.48 s. Retained under existing Draxul card 65; no cause/fix inferred. |
+| Isolated same-cache Flashcards startup | Passed, supervised hidden Windows child exited 0 in 2.475 s with Flashcards frame readiness logged. Fresh APPDATA/LOCALAPPDATA and dummy audio. An earlier direct GUI invocation provided neither completion evidence nor a log and is not counted as a pass. |
+| Final Release build/startup | Passed, `py do.py run release --console -- --smoke-test` exited 0. Build 151.23 s, 195 Ninja steps; CMake configure 70.9 s, generate 2.0 s. Outer build/startup 159.83 s; compilation/startup not separately timed. |
+
+The product aggregate is `py do.py test debug --flashcards --label flashcards`:
+six product groups, with model/generator overlapping the serialized GPU captures.
+The broader core inventory, audible quality, macOS/Metal execution and remote CI
+are not claimed as passes. Natural speaker/listening/macOS coverage remains owned
+by pending card 04; no render references are blessed.
+
+During publication the user directly authorized commit/push in this Flashcards
+chat. The originating delegated implementation request had asked for local work;
+the direct authorization is the separate authority to publish. Draxul main was
+fast-forwarded over fifteen already-published upstream commits and four clean
+product mounts synchronized to their recorded pointers. No unrelated local edits
+were included. Post-sync validation is separately identified below because the
+preceding captures ran the previously built host.
+
+Final actual screenshots at 900x760 and 620x720 were inspected. The queue stays
+wordless on reveal, English wraps inside the main back, new photo/list/calendar
+scenes are visible, and after grading both directions of the word appear under
+Later with a ten-minute wait. New cue backs are `new-photo-back.png`,
+`new-list-back.png`, `new-today-back.png`; layout captures are
+`queue-normal-back.png`, `queue-narrow-back.png`, `queue-after-grade.png` under
+`build-ninja-debug/flashcards-queue/` in the Draxul root. They are testable local
+artifacts, not public assets. No subjective audio listening is claimed.
+
+Before helper refresh, the exact older default server PID 59440 reported zero
+clients, agents and live terminals, with a healthy checkpoint. It was shut down
+through its own runtime CLI to permit refresh; no unrelated process was stopped.
+
+The UI/media/repeat-policy slice is ready in the local Debug and Release builds.
+The standard Debug host timeout remains explicitly transferred to Draxul card 65;
+natural-speaker/listening/macOS gates remain in product card 04. The user approved
+publication here. Shared Dropbox result exports are a separately authorized next
+slice and are not part of this checkpoint.

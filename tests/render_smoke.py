@@ -4,6 +4,7 @@ Windows sends input to the exact child SDL window. Other platforms capture the
 front without synthetic native input; model tests cover the backend-neutral loop.
 """
 import argparse
+import importlib.util
 import ctypes
 from ctypes import wintypes
 import json
@@ -16,13 +17,13 @@ import tempfile
 import time
 
 
-def bitmap(path):
+def bitmap(path, dimensions=(900, 760)):
     data = path.read_bytes()
     if data[:2] != b"BM" or len(data) < 54:
         raise RuntimeError("No valid host screenshot")
     offset = struct.unpack_from("<I", data, 10)[0]
     w, h = struct.unpack_from("<ii", data, 18)
-    if w != 900 or abs(h) != 760:
+    if (w, abs(h)) != dimensions:
         raise RuntimeError("Wrong screenshot dimensions")
     return data[offset:]
 
@@ -60,7 +61,7 @@ def find_window(pid):
     raise RuntimeError("Child SDL window did not appear")
 
 
-def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=True):
+def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=True, dimensions=(900, 760)):
     path = out / (name + ".bmp")
     log = out / (name + ".log")
     # A previous run's readiness/reveal diagnostics must never satisfy this
@@ -68,7 +69,7 @@ def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=T
     log.unlink(missing_ok=True)
     path.unlink(missing_ok=True)
     command = [str(exe), "--plugin", "dev.draxul.flashcards",
-        "--screenshot", str(path), "--screenshot-size", "900x760",
+        "--screenshot", str(path), "--screenshot-size", f"{dimensions[0]}x{dimensions[1]}",
         "--screenshot-delay", str(delay), "--log-file", str(out / (name + ".log"))]
     if config is not None:
         command += ["--plugin-config", json.dumps(config)]
@@ -137,7 +138,7 @@ def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=T
         process.wait(timeout=20)
         if process.returncode:
             raise RuntimeError("Host failed; inspect the retained " + name + ".log")
-        return bitmap(path)
+        return bitmap(path, dimensions)
     finally:
         if process.poll() is None:
             process.kill()
@@ -148,6 +149,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--source", required=True, type=Path)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="draxul-flashcards-review-") as temporary:
@@ -201,16 +203,35 @@ def main():
         if sum(a != b for a, b in zip(front, reopened)) < 300:
             raise RuntimeError("Reopened host ignored the saved schedule")
         if queued("reopened"):
-            raise RuntimeError("Production front played its answer")
+            raise RuntimeError("Reopened front played its answer")
+        # Simulate the already-tested ten-minute expiry without sleeping. The
+        # actual opposite direction must remain independently ungraded.
+        state["cards"][recognition_key]["last_reviewed"] -= 601
+        record = state["cards"][recognition_key]
+        spec = importlib.util.spec_from_file_location("embed_deck", Path(__file__).resolve().parents[1] / "tools/embed_deck.py")
+        embed = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(embed)
+        deck = embed.build_deck(args.source, Path(__file__).resolve().parents[1] / "assets/artwork.json")["cards"]
+        # Other new words would otherwise precede this newly eligible opposite
+        # direction. Seed them in the future in this isolated face fixture.
+        others = {direction + ":" + card["id"]: {
+            "stage": 0, "due": int(time.time()) + 86400, "last_reviewed": 0,
+            "reviews": 0, "remembered": 0, "forgotten": 0, "assisted": 0}
+            for card in deck if "recognition:" + card["id"] != recognition_key
+            for direction in ("recognition", "production")}
+        state["cards"].update(others)
+        files[0].write_text(json.dumps(state))
         capture(args.exe, args.out, "production-back", env, [32])
         # The other direction of the same word: actual mouse Again button.
-        capture(args.exe, args.out, "mouse-graded", env, [32, ("click", 200, 635)])
+        capture(args.exe, args.out, "mouse-graded", env, [32, ("click", 440, 635)])
         state = json.loads(files[0].read_bytes())
-        if len(state["cards"]) != 2 or sum(p["forgotten"] for p in state["cards"].values()) != 1:
+        if len(state["cards"]) != len(others) + 2 or sum(p["forgotten"] for p in state["cards"].values()) != 1:
             raise RuntimeError("Mouse grade did not persist the second card")
         production_key = recognition_key.replace("recognition:", "production:", 1)
         if production_key not in state["cards"] or state["cards"][recognition_key] != record:
             raise RuntimeError("Directions did not retain independent progress")
+        if any(state["cards"][key] != value for key, value in others.items()):
+            raise RuntimeError("Opposite grade changed another word's schedule")
         saved = files[0].read_bytes()
         capture(args.exe, args.out, "complete", env)
         if files[0].read_bytes() != saved:

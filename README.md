@@ -1,10 +1,12 @@
 # Draxul Flashcards
 
-A mounted native Draxul product plugin for translation-free Japanese practice.
-Each word has independent recognition and production schedules. Recognition shows
-kana on the front; production shows a picture or native diagram association. Both backs show
-the cue, kana, romanization and cached pronunciation. English translations
-and conversational journal details are never embedded.
+A mounted native Draxul product plugin for Japanese practice. Each word has
+independent recognition and production schedules. Recognition shows kana on the
+front; production shows a picture or native diagram association. Both backs show
+the cue, kana, romanization, a clear English description and cached pronunciation.
+The left-hand Up next column shows only cue images and direction indicators in
+the same order as the scheduler. English descriptions never appear in thumbnails.
+Conversational journal details and exposure schedules are never embedded.
 
 ## Launch
 
@@ -50,7 +52,7 @@ word list itself is still personal data.
   this guide before reviews; completing its pages saves `cue-guide-v1` separately
   from recall. Studying help neither plays audio nor records grades.
 - After revealing: 1 / Again, 2 / Remembered. Mouse buttons provide the same actions.
-- Front-side hints, audio and grades are unavailable, including during the turn.
+- Front-side audio and grades are unavailable, including during the turn. The cue-only queue intentionally provides image hints without revealing text answers.
 - Missing audio/device: an unavailable message appears; visual grading still works.
 - Missing image: clearly labeled, grading disabled, Skip advances without a grade.
 - Invalid/unreadable review state: preserved, grading blocked. Repair the file or
@@ -74,7 +76,7 @@ grades and commits through the SDK's atomic plugin-scope JSON storage before adv
 Close/rebuild/reopen keeps progress. Held keys and repeated mouse-down events cannot
 grade subsequent cards. Historical assisted counters are retained, but new grades
 are explicit self-reports. Grading one direction does not change
-the other. The generated deck uses schema 4, with one media record per word expanded
+the other. The generated deck uses schema 5, with one media record per word expanded
 into both directions by the review model.
 
 Storage key: `recall-v1`, under the host's plugin config path `state/recall-v1.json`.
@@ -107,8 +109,7 @@ Native NanoVG diagrams teach それ as the speaker pointing beside the listener;
 production front); and いいね as one friendly approval phrase expressed by a
 thumbs-up reaction to completed work. The grammar fragment teaches the requested
 subject-marker function, not "is" or a uniquely determined completion of a full
-sentence. Its Japanese dependency must exist in the active deck. Normal reviews
-remain translation-free; the optional English guide explains these associations.
+sentence. Its Japanese dependency must exist in the active deck. Answers now include English descriptions; the optional English guide explains these associations.
 
 Runtime plugin configuration also supports replacement images without rebuilding:
 
@@ -199,3 +200,54 @@ in both directions and verifies reveal-only audio/replay through SDL's dummy aud
 driver. It does not establish audible output or pronunciation quality. See
 [launch steps and validation evidence](docs/validation.md), including known host
 failures and platform limits.
+
+## Upcoming queue and current deck (2026-10-06)
+
+Up next includes the current card marked Now, followed by due cards, with future
+reviews under Later. A larger backlog beyond the 20-grade cap appears under Next
+batch. Read/Say distinguish recognition/production. The queue and main-card selection share one
+ordering function. Grading updates the queue and returns it to the top; skipped
+cards stay out of that batch. Mouse wheel over the column, or Up/Down buttons,
+scroll the column without changing recall. Thumbnails have no click-to-select
+behavior, answer tooltips, Japanese spelling, romanization or English meaning.
+The grammar preview substitutes a person for the subject spelling.
+
+The selected private journal build currently has nine words / eighteen directional
+reviews. A public fixture build continues to use its own words. New cue imagery:
+a camera flash paired with a framed image for a photograph, a clipboard list,
+and a wordless calendar with a highlighted present day. OpenMoji 17.0.0 sources
+are pinned in artwork.json, CC BY-SA 4.0; the photo and calendar display
+compositions share that licence. No Japanese answers are painted into them.
+
+Human pronunciation was added for photograph and today from the pinned licensed
+Tofugu/WaniKani archive. List has no verified cached recording; its back reports
+Pronunciation unavailable. Existing synthetic fallbacks remain clearly labelled.
+No new synthesis fills that gap. See docs/audio-coverage.md for all nine entries
+and the still-open speaker/listening work.
+
+English descriptions come from the journal's bounded meaning field, deliberately
+whitelisted for the revealed face. They do not enter thumbnails. Generated deck
+schema 5 requires them; recall-v1 storage and stable directional IDs stay intact.
+
+### Eligibility and struggling cards
+
+After either direction is explicitly graded, both directions of that word wait
+ten minutes. Effective eligibility is the later of the direction's own due time
+and the latest saved grade for that word plus 600 seconds. Independent stage,
+counters and stored due dates remain intact. Reopening and concurrent panes use
+the same durable cooldown; grading rereads it under the existing write lock.
+Revealing, audio, browsing and skipping do not start a cooldown.
+
+Only eligible due cards compete for selection. The order is: relearning cards
+(stage zero with an explicit forgotten count), other previously graded cards,
+then untouched new cards. Earlier effective due time wins within a group;
+stable deck order breaks ties. One Remembered grade raises the stage and clears
+the relearning priority, so a historical mistake does not count forever. Future
+and cooling-down cards appear under Later, ordered by effective eligibility time,
+and are never brought forward to fill a batch. A currently shown card stays first
+until it is graded/skipped or invalidated by another pane's grade.
+
+The tradeoff is that a small deck can become temporarily caught up even when its
+other directions have never been graded, and a backlog of relearning/ordinary
+reviews can postpone new cards. This policy uses explicit grades, never inferred
+correctness or passive viewing.

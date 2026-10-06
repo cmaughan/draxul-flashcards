@@ -69,6 +69,147 @@ TEST_CASE("Private human clips require provenance and exact spelling without res
 }
 }
 
+TEST_CASE("Upcoming previews share scheduler order without writing or revealing progress", "[flashcards]")
+{
+    DurableStore storage;
+    Card a = storage.cards.front(), b = a, c = a;
+    a.id = "a"; b.id = "b"; c.id = "c";
+    Card ap = a, bp = b;
+    ap.direction = bp.direction = Direction::Production;
+    storage.cards = { a, ap, b, bp, c };
+    State state;
+    state["recognition:a"] = { 1, storage.now - 100, storage.now - 1000, 1, 1, 0, 0 };
+    state["recognition:b"] = { 1, storage.now - 150, storage.now - 1000, 1, 1, 0, 0 };
+    state["recognition:c"] = { 1, storage.now + 100, storage.now - 1000, 1, 1, 0, 0 };
+    storage.saved = serialize_state(state);
+    auto review = storage.open();
+    const auto before = storage.saved;
+    for (int repeat = 0; repeat < 20; ++repeat)
+    {
+        const auto queue = review.queue();
+        REQUIRE(queue.size() == 5);
+        REQUIRE(queue[0].card == review.current());
+        REQUIRE(queue[0].current);
+        REQUIRE(queue[0].card->id == "b");
+        REQUIRE(queue[0].card->direction == Direction::Recognition);
+        REQUIRE(queue[1].card->id == "a");
+        REQUIRE(queue[1].card->direction == Direction::Recognition);
+        REQUIRE(queue[2].card->id == "a");
+        REQUIRE(queue[2].card->direction == Direction::Production);
+        REQUIRE(queue[3].card->id == "b");
+        REQUIRE(queue[3].due_now);
+        REQUIRE_FALSE(queue[4].due_now);
+        REQUIRE(queue[4].due == storage.now + 100);
+    }
+    REQUIRE_FALSE(review.revealed());
+    REQUIRE(storage.saved == before);
+    REQUIRE(storage.writes == 0);
+    REQUIRE(recalled(review, false));
+    auto queue = review.queue();
+    REQUIRE(queue.front().card == review.current());
+    REQUIRE(queue.front().card->id == "a");
+    REQUIRE(queue.front().card->direction == Direction::Recognition);
+    REQUIRE(queue[2].card->id == "c");
+    REQUIRE_FALSE(queue[2].due_now);
+    REQUIRE(queue.back().card->id == "b");
+    REQUIRE(queue.back().due == storage.now + 600);
+    REQUIRE(review.remaining_grades() == 19);
+    review.skip();
+    REQUIRE(review.queue().front().card == review.current());
+    REQUIRE(review.current()->direction == Direction::Production);
+    REQUIRE(review.queue().size() == 4);
+    storage.now += 600;
+    queue = review.queue();
+    REQUIRE(std::all_of(queue.begin(), queue.end(), [](const auto& c) { return c.due_now; }));
+    REQUIRE(storage.writes == 1);
+    REQUIRE_FALSE(review.revealed());
+}
+
+TEST_CASE("Word cooldown spans directions, panes and reopening without pulling future cards forward", "[flashcards]")
+{
+    DurableStore storage;
+    auto opposite = storage.cards.front();
+    opposite.direction = Direction::Production;
+    storage.cards.push_back(opposite);
+    auto recognition = storage.open();
+    auto stale_production = storage.open();
+    stale_production.skip();
+    REQUIRE(stale_production.current()->direction == Direction::Production);
+    REQUIRE(recalled(recognition, true));
+    const auto saved = storage.saved;
+    REQUIRE_FALSE(recognition.current());
+    REQUIRE(recognition.due_count() == 0);
+    REQUIRE(recognition.next_due() == storage.now + 600);
+    REQUIRE_FALSE(recalled(stale_production, false));
+    REQUIRE(storage.saved == saved);
+    REQUIRE_FALSE(stale_production.current());
+    auto reopened = storage.open();
+    REQUIRE_FALSE(reopened.current());
+    REQUIRE(reopened.queue().size() == 2);
+    REQUIRE(reopened.queue()[0].card->direction == Direction::Production);
+    REQUIRE(reopened.queue()[0].due == storage.now + 600);
+    REQUIRE_FALSE(reopened.queue()[0].due_now);
+    storage.now += 599;
+    reopened.refresh();
+    REQUIRE_FALSE(reopened.current());
+    REQUIRE(reopened.due_count() == 0);
+    ++storage.now;
+    reopened.refresh();
+    REQUIRE(reopened.current()->direction == Direction::Production);
+    REQUIRE(reopened.due_count() == 1);
+    REQUIRE(recalled(reopened, false));
+    REQUIRE_FALSE(reopened.current());
+    REQUIRE(reopened.next_due() == storage.now + 600);
+    REQUIRE(parse_state(*storage.saved).at("recognition:apple") == parse_state(*saved).at("recognition:apple"));
+    storage.now += 600;
+    reopened.refresh();
+    REQUIRE(reopened.current()->direction == Direction::Production);
+    REQUIRE(storage.writes == 2);
+
+    // A live pane also refreshes when the opposite direction is graded elsewhere.
+    auto live = storage.open();
+    auto other = storage.open();
+    REQUIRE(recalled(other, true));
+    live.refresh();
+    REQUIRE_FALSE(live.current());
+    REQUIRE_FALSE(live.revealed());
+}
+
+TEST_CASE("Due relearning precedes reviews and new cards, and Remembered clears struggle priority", "[flashcards]")
+{
+    DurableStore storage;
+    auto card = storage.cards.front();
+    storage.cards.clear();
+    for (const auto* id : { "new", "recovered", "struggle", "future" })
+    {
+        card.id = id;
+        storage.cards.push_back(card);
+    }
+    State state;
+    state["recognition:recovered"] = { 2, storage.now - 200, storage.now - 1000, 3, 2, 1, 0 };
+    state["recognition:struggle"] = { 0, storage.now - 1, storage.now - 601, 1, 0, 1, 0 };
+    state["recognition:future"] = { 0, storage.now + 60, storage.now - 540, 1, 0, 1, 0 };
+    storage.saved = serialize_state(state);
+    auto review = storage.open();
+    const auto queue = review.queue();
+    REQUIRE(review.current()->id == "struggle");
+    REQUIRE(queue[1].card->id == "recovered");
+    REQUIRE(queue[2].card->id == "new");
+    REQUIRE(queue[3].card->id == "future");
+    REQUIRE_FALSE(queue[3].due_now);
+    REQUIRE(review.due_count() == 3);
+    REQUIRE(recalled(review, true));
+    REQUIRE(review.current()->id == "recovered");
+    REQUIRE(parse_state(*storage.saved).at("recognition:struggle").stage == 1);
+    // On its next due date the recovered struggle no longer outranks older reviews.
+    storage.now += 86400;
+    review.start_batch();
+    REQUIRE(review.current()->id == "future");
+    REQUIRE(review.queue()[1].card->id == "recovered");
+    REQUIRE(review.queue()[2].card->id == "struggle");
+    REQUIRE(review.queue()[3].card->id == "new");
+}
+
 TEST_CASE("Recognition persists explicit grades across reopened and rebuilt decks", "[flashcards]")
 {
     DurableStore storage;
@@ -125,10 +266,12 @@ TEST_CASE("Embedded words create independent directions and retain existing reco
     auto first = storage.open();
     REQUIRE(recalled(first, true));
     const auto original = storage.progress();
-    storage.cards = parse_deck(R"({"schema_version":4,"kind":"bidirectional","cards":[
+    storage.cards = parse_deck(R"({"schema_version":5,"kind":"bidirectional","cards":[
         {"id":"apple","kana":"りんご","romaji":"ringo","image":"apple.jpg",
-         "attribution":"license","audio":[{"file":"ringo.wav","attribution":"voice","speaker":"Mei synthetic voice","synthetic":true}],"cue":"picture","cue_subject":""}]})");
+         "attribution":"license","audio":[{"file":"ringo.wav","attribution":"voice","speaker":"Mei synthetic voice","synthetic":true}],"cue":"picture","cue_subject":"","meaning":"Fixture description"}]})");
     REQUIRE(storage.cards.size() == 2);
+    REQUIRE_FALSE(storage.open().current()); // Shared cooldown survives deck rebuild.
+    storage.now += 600;
     auto production = storage.open();
     REQUIRE(production.current()->direction == Direction::Production);
     REQUIRE_FALSE(production.grade(true));
@@ -285,10 +428,10 @@ TEST_CASE("Native cue additions retain history and independent schedules without
     auto existing = storage.open();
     REQUIRE(recalled(existing, true));
     const auto original = storage.progress();
-    storage.cards = parse_deck(R"({"schema_version":4,"kind":"bidirectional","cards":[
-      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":[{"file":"ga.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"subject-marker","cue_subject":"それ"},
-      {"id":"sore","kana":"それ","romaji":"sore","image":"","attribution":"original","audio":[{"file":"sore.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"listener-reference","cue_subject":""},
-      {"id":"ii-ne","kana":"いいね","romaji":"ii ne","image":"","attribution":"original","audio":[{"file":"ii-ne.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"approval-reaction","cue_subject":""}
+    storage.cards = parse_deck(R"({"schema_version":5,"kind":"bidirectional","cards":[
+      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":[{"file":"ga.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"subject-marker","cue_subject":"それ","meaning":"Subject marker after the highlighted subject"},
+      {"id":"sore","kana":"それ","romaji":"sore","image":"","attribution":"original","audio":[{"file":"sore.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"listener-reference","cue_subject":"","meaning":"Fixture description"},
+      {"id":"ii-ne","kana":"いいね","romaji":"ii ne","image":"","attribution":"original","audio":[{"file":"ii-ne.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"approval-reaction","cue_subject":"","meaning":"Fixture description"}
     ]})");
     REQUIRE(storage.cards.size() == 6);
     REQUIRE(storage.cards[0].cue == VisualCue::SubjectMarker);
@@ -299,6 +442,14 @@ TEST_CASE("Native cue additions retain history and independent schedules without
     REQUIRE(recalled(recognition, true));
     const auto recorded = parse_state(*storage.saved).at("recognition:ga");
     auto production = storage.open();
+    REQUIRE(production.current()->id == "sore"); // Opposite ga direction is cooling down.
+    REQUIRE(recalled(production, true));
+    REQUIRE(production.current()->id == "ii-ne");
+    REQUIRE(recalled(production, true));
+    REQUIRE_FALSE(production.current());
+    storage.now += 600;
+    production.start_batch();
+    REQUIRE(production.current()->id == "ga");
     REQUIRE(production.current()->direction == Direction::Production);
     REQUIRE(recalled(production, false));
     auto state = parse_state(*storage.saved);
@@ -310,16 +461,14 @@ TEST_CASE("Native cue additions retain history and independent schedules without
     REQUIRE(reopened.current()->id == "sore");
     REQUIRE(recalled(reopened, true));
     REQUIRE(recalled(reopened, true));
-    REQUIRE(recalled(reopened, true));
-    REQUIRE(recalled(reopened, true));
     REQUIRE_FALSE(storage.open().current());
     REQUIRE(parse_state(*storage.saved).size() == 7);
 }
 
 TEST_CASE("Native cue spelling and active subject dependencies are validated", "[flashcards]")
 {
-    const std::string ga_only = R"({"schema_version":4,"kind":"bidirectional","cards":[
-      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":[{"file":"ga.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"subject-marker","cue_subject":"それ"}]})";
+    const std::string ga_only = R"({"schema_version":5,"kind":"bidirectional","cards":[
+      {"id":"ga","kana":"が","romaji":"ga","image":"","attribution":"original","audio":[{"file":"ga.wav","attribution":"Mei","speaker":"Mei synthetic voice","synthetic":true}],"cue":"subject-marker","cue_subject":"それ","meaning":"Subject marker after the highlighted subject"}]})";
     REQUIRE_THROWS(parse_deck(ga_only));
     auto wrong_cue = ga_only;
     wrong_cue.replace(wrong_cue.find("subject-marker"), 14, "unknown-cue");

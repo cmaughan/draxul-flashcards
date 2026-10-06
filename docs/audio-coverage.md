@@ -1,4 +1,4 @@
-# Human pronunciation coverage, 2026-10-02
+# Human pronunciation coverage, refreshed 2026-10-06
 
 The user prefers natural human recordings, ideally 2–3 distinct native Japanese
 speakers per entry where suitable clips are available. This preference applies
@@ -12,8 +12,11 @@ to future media curation. No new words or purchases are authorized by it.
 | それ (sore) | 0 | Commons Ja-sore identifies a non-native speaker; excluded from native learning coverage | Clearly labelled Mei synthetic fallback |
 | が (ga) | 0 | No reusable recording verified for this subject-marker card; no sentence audio was chopped | Clearly labelled Mei synthetic fallback |
 | いいね (ii ne) | 0 | Complete friendly approval phrase required; no concatenated syllables or split entries | Clearly labelled Mei synthetic fallback |
+| しゃしん (shashin) | 1 | Tofugu archive voice; native Japanese stated by publisher, file-level identity unspecified | Human |
+| リスト (risuto) | 0 | No exact suitable reusable human clip found in the checked archive/Commons sources | Pronunciation unavailable, no silent synthesis |
+| きょう (kyou) | 1 | Tofugu archive voice; native Japanese stated by publisher, file-level identity unspecified | Human |
 
-The 2–3 native-speaker target is **not yet met** for any entry. Two entries now
+The 2–3 native-speaker target is **not yet met** for any entry. Four entries now
 have human coverage, with one publisher-supported native voice per entry and an
 additional named human voice of unverified native status for あさ. This report
 does not infer gender, voice identity, native status, pitch accuracy or user recall.
@@ -66,3 +69,30 @@ to fill these isolated-word/particle gaps.
 
 Track further exact recordings, verified permissions, native-speaker coverage and
 human listening review in [the human audio card](../kanban/pending/04%20human-pronunciation-and-speaker-cycling%20-feature.md).
+
+## Refresh evidence, 2026-10-06
+
+The authenticated GitHub tree of the same pinned Tofugu commit contains exact
+complete photograph and today recordings. Downloaded original Oggs into the
+ignored curation directory, decoded to mono 48 kHz PCM16 without trimming,
+gain/pitch/speed changes or concatenation. Public WAV hashes and original URLs
+are in artwork.json; the existing full publisher licence applies.
+
+| New cache | Duration | Peak amplitude | Clipped PCM samples |
+|---|---:|---:|---:|
+| shashin-tofugu.wav | 0.849 s | 0.189 | 0 |
+| kyou-tofugu.wav | 0.509 s | 0.305 | 0 |
+
+All nine current entries have vetted visual cues. Eight have selected cached
+pronunciation; list has none. Human media covers four entries (five clips,
+including the previously named CKali voice with unverified native status).
+Five entries still lack verified human recordings: agent, near-listener that,
+subject-marker particle, the complete approval phrase, and list. The licensed
+archive has no exact entries for those spellings; the checked Commons search
+provided no new suitable exact list recording. This is bounded curation evidence,
+not a claim that recordings do not exist elsewhere. No private media was copied
+into the public package. No new native status, speaker identity, subjective
+listening, pronunciation quality or recall was inferred.
+
+Remaining coverage/listening work stays in the human-audio card. The current
+refresh is tracked separately as upcoming-cue-column-and-current-deck.

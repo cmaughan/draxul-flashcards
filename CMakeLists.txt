@@ -30,7 +30,7 @@ add_custom_target(draxul-flashcards-deck-check
         --artwork "${DRAXUL_FLASHCARDS_ARTWORK_MAP}" --output "${_deck_header}"
     BYPRODUCTS "${_deck_header}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_deck.py"
-    COMMENT "Validating and embedding translation-free flashcards" VERBATIM)
+    COMMENT "Validating and embedding flashcard cues and answers" VERBATIM)
 
 add_library(draxul-flashcards-review STATIC src/review.cpp src/review.h src/review_lock.cpp src/review_lock.h)
 set_target_properties(draxul-flashcards-review PROPERTIES POSITION_INDEPENDENT_CODE ON)

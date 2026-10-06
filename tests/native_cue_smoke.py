@@ -65,7 +65,7 @@ def main():
             capture(args.exe, args.out, name + "-recognition-back", env, [32, ord("R")])
             if queued(name + "-recognition-back") != 2 or state_path.read_bytes() != saved:
                 raise RuntimeError("Native recognition did not reveal/replay without changing grades")
-            front = capture(args.exe, args.out, name + "-production-front", env, [32, ord("2")])
+            capture(args.exe, args.out, name + "-recognition-graded", env, [32, ord("2")])
             state = json.loads(state_path.read_text())["cards"]
             rkey, pkey = "recognition:" + card["id"], "production:" + card["id"]
             if len(state) != len(others) + 1 or rkey not in state or pkey in state:
@@ -73,7 +73,12 @@ def main():
             recognition = state[rkey]
             if recognition["remembered"] != 1 or any(state[k] != value for k, value in others.items()):
                 raise RuntimeError("Native grading damaged other history")
+            # Simulate expiry in this isolated fixture; the model tests verify
+            # the real 599/600-second boundary and stale opposite-pane rejection.
+            recognition["last_reviewed"] -= 601
+            state_path.write_text(json.dumps({"schema_version": 1, "cards": state}))
             saved = state_path.read_bytes()
+            front = capture(args.exe, args.out, name + "-production-front", env)
             back = capture(args.exe, args.out, name + "-production-back", env, [32, ord("R")])
             if state_path.read_bytes() != saved or queued(name + "-production-back") != 2:
                 raise RuntimeError("Native production reveal/replay wrote a grade")

@@ -35,6 +35,34 @@
       "license": "CC-BY-SA-4.0",
       "attribution": "OpenMoji / HfG Schwabisch Gmund - CC BY-SA 4.0",
       "changes": "Original unchanged; software-task scene drawn separately"
+    },
+    "photo": {
+      "file": "photo-cue.png",
+      "source": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/17.0.0/color/618x618/1F5BC.png",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "OpenMoji / HfG Schwabisch Gmund and contributors - CC BY-SA 4.0",
+      "changes": "Original unchanged. Display pairs the framed picture with a camera flash to distinguish a photograph from a painting; no answer text. Composition offered under CC BY-SA 4.0."
+    },
+    "list": {
+      "file": "list-cue.png",
+      "source": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/17.0.0/color/618x618/1F4CB.png",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "OpenMoji / HfG Schwabisch Gmund and contributors - CC BY-SA 4.0",
+      "changes": "Original unchanged; no target spelling or translation added."
+    },
+    "today": {
+      "file": "today-cue.png",
+      "source": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/17.0.0/color/618x618/1F5D3.png",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "OpenMoji / HfG Schwabisch Gmund and contributors - CC BY-SA 4.0",
+      "changes": "Original unchanged; wordless cue. Calendar display highlights one present day; display adaptation offered under CC BY-SA 4.0."
+    },
+    "camera": {
+      "attribution": "OpenMoji / HfG Schwabisch Gmund and contributors - CC BY-SA 4.0",
+      "changes": "Original unchanged. Display pairs a camera flash with the framed picture as a photograph cue, without answer text; composition offered under CC BY-SA 4.0.",
+      "license": "CC-BY-SA-4.0",
+      "source": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/17.0.0/color/618x618/1F4F8.png",
+      "file": "camera-cue.png"
     }
   },
   "by_kana": {
@@ -42,7 +70,10 @@
     "エージェント": "assistant",
     "あさ": "morning",
     "りんご": "apple",
-    "ロボット": "robot"
+    "ロボット": "robot",
+    "しゃしん": "photo",
+    "リスト": "list",
+    "きょう": "today"
   },
   "by_id": {},
   "audio": {
@@ -166,6 +197,28 @@
       "synthetic": false,
       "quality": "Japanese transcription and named speaker stated by source. Native status and gender unverified. Signal checked; auditory assessment unavailable.",
       "sha256": "ea93dbbd74e1c72c26882cec0c6b7bad2c609a1acfe39143b95ed8c421b93fd4"
+    },
+    "shashin-tofugu": {
+      "file": "shashin-tofugu.wav",
+      "source": "https://raw.githubusercontent.com/tofugu/japanese-vocabulary-pronunciation-audio/9725e0e7d628ab616e8b14e126d3daa33eba8d36/lib/ogg/%E5%86%99%E7%9C%9F%E3%80%90%E3%81%97%E3%82%83%E3%81%97%E3%82%93%E3%80%91.ogg",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Tofugu and WaniKani - CC BY-SA 4.0",
+      "changes": "Complete original word; Ogg decoded to mono 48 kHz PCM16. No trimming, pitch, speed or gain edits.",
+      "speaker": "Tofugu archive voice",
+      "synthetic": false,
+      "quality": "Publisher identifies archive voices as native Japanese. File-level identity/accent unspecified. Signal checked; auditory assessment unavailable.",
+      "sha256": "1de06c549f238ff55a60113cf2b6528060c73aff0359550c834101d324841082"
+    },
+    "kyou-tofugu": {
+      "file": "kyou-tofugu.wav",
+      "source": "https://raw.githubusercontent.com/tofugu/japanese-vocabulary-pronunciation-audio/9725e0e7d628ab616e8b14e126d3daa33eba8d36/lib/ogg/%E4%BB%8A%E6%97%A5%E3%80%90%E3%81%8D%E3%82%87%E3%81%86%E3%80%91.ogg",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Tofugu and WaniKani - CC BY-SA 4.0",
+      "changes": "Complete original word; Ogg decoded to mono 48 kHz PCM16. No trimming, pitch, speed or gain edits.",
+      "speaker": "Tofugu archive voice",
+      "synthetic": false,
+      "quality": "Publisher identifies archive voices as native Japanese. File-level identity/accent unspecified. Signal checked; auditory assessment unavailable.",
+      "sha256": "42d1c04cb22c3c706b7d626fa1c62fda0fc3ea0a03be196b5fc960d3b8038121"
     }
   },
   "audio_by_kana": {
@@ -193,6 +246,12 @@
     ],
     "いいね": [
       "ii-ne"
+    ],
+    "しゃしん": [
+      "shashin-tofugu"
+    ],
+    "きょう": [
+      "kyou-tofugu"
     ]
   },
   "cues": {

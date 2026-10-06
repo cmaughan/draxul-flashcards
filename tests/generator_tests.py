@@ -35,11 +35,12 @@ class GeneratorBoundary(unittest.TestCase):
         original = self.source.read_bytes()
         deck = embed.build_deck(self.source, self.art)
         payload = json.dumps(deck, ensure_ascii=False)
-        for private in ("PRIVATE_CONTEXT", "PRIVATE_TIME", "PRIVATE_GUIDE", "meaning", str(self.root)):
+        for private in ("PRIVATE_CONTEXT", "PRIVATE_TIME", "PRIVATE_GUIDE", str(self.root)):
             self.assertNotIn(private, payload)
-        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution", "audio", "cue", "cue_subject"})
-        self.assertEqual(deck["schema_version"], 4)
+        self.assertEqual(set(deck["cards"][0]), {"id", "kana", "romaji", "image", "attribution", "audio", "cue", "cue_subject", "meaning"})
+        self.assertEqual(deck["schema_version"], 5)
         self.assertEqual(deck["kind"], "bidirectional")
+        self.assertEqual(deck["cards"][0]["meaning"], sorted(self.doc["words"], key=lambda w:w["id"])[0]["meaning"])
         self.assertTrue(all(c["audio"] and all(a["file"].endswith(".wav") for a in c["audio"]) for c in deck["cards"]))
         self.assertEqual({c["kana"] for c in deck["cards"]}, {"りんご", "ロボット", "それ", "が", "いいね"})
         self.assertTrue(embed.generate(self.source, self.art, self.output))
@@ -71,6 +72,21 @@ class GeneratorBoundary(unittest.TestCase):
         self.write()
         with self.assertRaisesRegex(ValueError, "outside this deck"):
             embed.build_deck(self.source, self.art)
+
+    def test_new_cues_and_english_answer_payload_keep_private_journal_fields_out(self):
+        self.doc["words"] += [
+            {"id":"fixture-photo", "kana":"しゃしん", "romaji":"shashin", "meaning":"photograph; photo"},
+            {"id":"fixture-list", "kana":"リスト", "romaji":"risuto", "meaning":"list"},
+            {"id":"fixture-today", "kana":"きょう", "romaji":"kyou", "meaning":"today"}]
+        self.write()
+        cards = {c["kana"]: c for c in embed.build_deck(self.source,self.art)["cards"]}
+        for kana in ("しゃしん", "リスト", "きょう"):
+            self.assertTrue((ROOT / "assets" / cards[kana]["image"]).is_file())
+            self.assertEqual(cards[kana]["cue"], "picture")
+            self.assertTrue(cards[kana]["meaning"])
+        for kana in ("しゃしん", "きょう"):
+            self.assertFalse(cards[kana]["audio"][0]["synthetic"])
+        self.assertEqual(cards["リスト"]["audio"], []) # Verified human-media gap stays honest.
 
     def test_human_clip_selection_and_public_package_boundary(self):
         import hashlib

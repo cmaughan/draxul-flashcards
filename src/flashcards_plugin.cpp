@@ -54,6 +54,8 @@ struct Instance
     std::unique_ptr<IPluginNanoVGPass> pass;
     std::vector<Hit> hits;
     float scale = 1;
+    float queue_scroll = 0, queue_max_scroll = 0;
+    float queue_left = 0, queue_width = 0;
     bool visible = true, focused = false, quiesced = false;
     std::set<uint32_t> held_keys;
     bool mouse_down = false;
@@ -155,6 +157,12 @@ void act(Instance& instance, std::string_view action)
 {
     if (instance.quiesced || !instance.visible)
         return;
+    if (action == "queue-up" || action == "queue-down")
+    {
+        instance.queue_scroll = std::clamp(instance.queue_scroll
+            + (action == "queue-up" ? -260.0f : 260.0f), 0.0f, instance.queue_max_scroll);
+        changed(instance); return;
+    }
     if (action == "help")
     {
         stop_audio(instance); instance.flipping = false;
@@ -206,6 +214,7 @@ void act(Instance& instance, std::string_view action)
     {
         if (instance.review->grade(action == "remembered") || !instance.review->revealed())
         {
+            instance.queue_scroll = 0;
             stop_audio(instance);
             instance.audio_status.clear();
             instance.audio_index = 0;
@@ -218,6 +227,7 @@ void act(Instance& instance, std::string_view action)
         instance.audio_index = 0;
         if (action == "skip") instance.review->skip();
         else instance.review->start_batch();
+        instance.queue_scroll = 0;
     }
     changed(instance);
 }
@@ -373,6 +383,111 @@ void software_scene(NVGcontext* vg, int handle, float x, float y, float w, float
     nvgFillColor(vg, nvgRGB(91, 132, 180)); nvgFill(vg);
     nvgRestore(vg);
 }
+// Both production faces and queue images use the same cue. Preview mode has no
+// subject spelling and never draws answer metadata or a revealing tooltip.
+bool draw_cue(Instance& instance, NVGcontext* vg, const flashcards::Card& card,
+    bool back, float x, float y, float w, float h, bool preview = false)
+{
+    const bool custom = instance.image_overrides.contains(card.id);
+    const std::string name = custom ? instance.image_overrides.at(card.id) : card.image;
+    if (!custom && card.cue != flashcards::VisualCue::Picture)
+    {
+        flashcards::cues::draw(vg, card, back, x, y, w, h, preview);
+        return true;
+    }
+    const int handle = image(instance, vg, name);
+    if (handle <= 0) return false;
+    if (!custom && name == "assistant-crisp.png") software_scene(vg, handle, x, y, w, h);
+    else if (!custom && name == "morning-wakeup.jpg") morning_scene(vg, handle, x, y, w, h);
+    else if (!custom && name == "printed-word.png") printed_word_scene(vg, handle, x, y, w, h);
+    else if (!custom && name == "photo-cue.png")
+    {
+        const float unit = std::min(w / 480, h / 260);
+        nvgSave(vg); nvgTranslate(vg, x + w / 2, y + h / 2); nvgScale(vg, unit, unit);
+        rect(vg, -225, -115, 450, 230, nvgRGB(230, 236, 242), 15);
+        const int camera = image(instance, vg, "camera-cue.png");
+        if (camera > 0) picture(vg, camera, -208, -93, 185, 185);
+        picture(vg, handle, 38, -96, 185, 185);
+        flashcards::cues::line(vg, -13, 0, 30, 0, nvgRGB(63, 120, 181), 5);
+        flashcards::cues::line(vg, 19, -11, 30, 0, nvgRGB(63, 120, 181), 5);
+        flashcards::cues::line(vg, 19, 11, 30, 0, nvgRGB(63, 120, 181), 5);
+        nvgRestore(vg);
+        return camera > 0;
+    }
+    else
+    {
+        picture(vg, handle, x, y, w, h);
+        if (!custom && name == "today-cue.png")
+        {
+            // Highlight the present day on a wordless calendar. Original pixels
+            // stay unchanged; this display adaptation shares CC BY-SA 4.0.
+            const float unit = std::min(w, h) / 618.0f;
+            const float cx = x + w / 2 - 51 * unit, cy = y + h / 2 + 31 * unit;
+            nvgBeginPath(vg); nvgCircle(vg, cx, cy, 35 * unit);
+            nvgStrokeColor(vg, nvgRGB(222, 153, 35)); nvgStrokeWidth(vg, 10 * unit); nvgStroke(vg);
+        }
+    }
+    return true;
+}
+
+void draw_queue(Instance& instance, NVGcontext* vg, float x, float w)
+{
+    instance.queue_left = x; instance.queue_width = w;
+    const auto queue = instance.review->queue();
+    constexpr float top = 132, clip_height = 466, row_height = 108;
+    const auto muted = nvgRGB(153, 173, 197), accent = nvgRGB(132, 211, 192);
+    rect(vg, x, 96, w, 502, nvgRGB(25, 40, 58), 16);
+    label(vg, x + 12, 107, 15, "Up next", nvgRGB(237, 243, 250));
+    float content_height = 0;
+    std::string previous;
+    size_t due_index = 0;
+    for (const auto& entry : queue)
+    {
+        const std::string group = entry.due_now
+            ? (due_index++ < instance.review->remaining_grades() ? "Due" : "Next batch") : "Later";
+        if (group != previous) { content_height += 25; previous = group; }
+        content_height += row_height;
+    }
+    instance.queue_max_scroll = std::max(0.0f, content_height - clip_height);
+    instance.queue_scroll = std::clamp(instance.queue_scroll, 0.0f, instance.queue_max_scroll);
+    nvgSave(vg); nvgIntersectScissor(vg, x, top, w, clip_height);
+    float y = top - instance.queue_scroll;
+    previous.clear(); due_index = 0;
+    for (size_t index = 0; index < queue.size(); ++index)
+    {
+        const auto& entry = queue[index];
+        const std::string group = entry.due_now
+            ? (due_index++ < instance.review->remaining_grades() ? "Due" : "Next batch") : "Later";
+        if (group != previous)
+        {
+            label(vg, x + 12, y + 3, 11, group, muted);
+            previous = group; y += 25;
+        }
+        if (y + row_height >= top && y < top + clip_height)
+        {
+            rect(vg, x + 8, y, w - 20, 100, entry.current ? nvgRGB(53, 83, 104) : nvgRGB(36, 53, 70), 10);
+            rect(vg, x + 13, y + 5, w - 30, 70, nvgRGB(248, 247, 242), 7);
+            if (!draw_cue(instance, vg, *entry.card, false, x + 17, y + 8, w - 38, 64, true))
+                label(vg, x + w / 2 - 3, y + 30, 11, "Image unavailable", muted, NVG_ALIGN_CENTER);
+            label(vg, x + 14, y + 80, 10, entry.current ? "Now"
+                : "#" + std::to_string(index + 1), accent);
+            label(vg, x + w - 18, y + 80, 10,
+                entry.card->direction == flashcards::Direction::Production ? "Say" : "Read", muted, NVG_ALIGN_RIGHT);
+        }
+        y += row_height;
+    }
+    if (queue.empty()) label(vg, x + 12, top + 15, 11, "No queue available", muted);
+    nvgRestore(vg);
+    if (instance.queue_max_scroll > 0)
+    {
+        const float thumb = std::max(24.0f, clip_height * clip_height / content_height);
+        const float sy = top + (clip_height - thumb) * instance.queue_scroll / instance.queue_max_scroll;
+        rect(vg, x + w - 7, sy, 3, thumb, nvgRGB(100, 126, 148), 2);
+        button(instance, vg, x, 608, (w - 8) / 2, "Up", "queue-up", nvgRGB(34, 55, 77));
+        button(instance, vg, x + (w + 8) / 2, 608, (w - 8) / 2, "Down", "queue-down", nvgRGB(34, 55, 77));
+    }
+}
+
 void draw_guide(Instance& instance, NVGcontext* vg, float left, float panel, float width)
 {
     const auto ink = nvgRGB(34, 53, 73), muted = nvgRGB(80, 100, 122);
@@ -415,17 +530,20 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
             return;
         }
     }
-    instance.scale = std::max(0.1f, std::min(pixel_w / 720.0f, pixel_h / 660.0f));
+    instance.scale = std::max(0.1f, std::min(pixel_w / 800.0f, pixel_h / 660.0f));
     nvgSave(vg); nvgScale(vg, instance.scale, instance.scale);
     const float width = pixel_w / instance.scale, height = pixel_h / instance.scale;
-    const float panel = std::min(width - 64, 740.0f), left = (width - panel) / 2;
+    const float queue_width = std::min(200.0f, width * 0.22f);
+    const float panel = std::min(width - queue_width - 84, 740.0f);
+    const float group_left = (width - panel - queue_width - 20) / 2;
+    const float left = group_left + queue_width + 20, center = left + panel / 2;
     const auto white = nvgRGB(237, 243, 250), muted = nvgRGB(153, 173, 197), ink = nvgRGB(27, 45, 66);
     rect(vg, 0, 0, width, height, nvgRGB(16, 27, 43), 0);
     label(vg, left, 21, 24, "Japanese flashcards", white);
     label(vg, left, 59, 13, std::to_string(instance.review->due_count()) + " reviews due", muted);
     if (instance.guide_visible)
     {
-        draw_guide(instance, vg, left, panel, width);
+        draw_guide(instance, vg, left, panel, center * 2);
         nvgRestore(vg);
         if (!instance.frame_ready_logged)
         {
@@ -434,6 +552,7 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
         }
         return;
     }
+    draw_queue(instance, vg, group_left, queue_width);
     button(instance, vg, left + panel - 94, 48, 94, "Help", "help", nvgRGB(34, 55, 77));
     const auto* card = instance.review->current();
     if (card)
@@ -451,11 +570,11 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
             : flashcards::FlipSample{ 1, 0, 0, instance.review->revealed(), true };
         const float cy = 307;
         // Ground shadow and a shaded edge keep the turn legible at its midpoint.
-        nvgBeginPath(vg); nvgEllipse(vg, width / 2, 527, panel * 0.46f * frame.width, 10);
+        nvgBeginPath(vg); nvgEllipse(vg, center, 527, panel * 0.46f * frame.width, 10);
         nvgFillColor(vg, nvgRGBA(0, 0, 0, 70)); nvgFill(vg);
-        nvgSave(vg); nvgTranslate(vg, width / 2, cy);
+        nvgSave(vg); nvgTranslate(vg, center, cy);
         nvgTransform(vg, frame.width, frame.skew, 0, 1, 0, 0);
-        nvgTranslate(vg, -width / 2, -cy);
+        nvgTranslate(vg, -center, -cy);
         rect(vg, left + 3, 99, panel, 422, nvgRGB(152, 165, 177), 22);
         rect(vg, left, 96, panel, 422, nvgRGB(248, 247, 242), 22);
         if (frame.width > 0.055f)
@@ -463,40 +582,34 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
             if (!frame.back && !production)
             {
                 const float size = std::min(76.0f, (panel - 64) / std::max<size_t>(1, card->kana.size() / 3));
-                label(vg, width / 2, cy - size * 0.6f, size, card->kana, ink, NVG_ALIGN_CENTER);
+                label(vg, center, cy - size * 0.6f, size, card->kana, ink, NVG_ALIGN_CENTER);
             }
             else
             {
                 const float image_y = frame.back ? 116 : 126;
-                const float image_h = frame.back ? 220 : 350;
+                const float image_h = frame.back ? 168 : 350;
                 if (visual_ready)
                 {
-                    if (native)
-                        flashcards::cues::draw(vg, *card, frame.back, left + 24, image_y, panel - 48, image_h);
-                    else if (!custom && image_name == "assistant-crisp.png")
-                        software_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
-                    else if (!custom && image_name == "morning-wakeup.jpg")
-                        morning_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
-                    else if (!custom && image_name == "printed-word.png")
-                        printed_word_scene(vg, handle, left + 24, image_y, panel - 48, image_h);
-                    else picture(vg, handle, left + 24, image_y, panel - 48, image_h);
+                    draw_cue(instance, vg, *card, frame.back, left + 24, image_y, panel - 48, image_h);
                 }
                 else paragraph(vg, left + 36, 248, panel - 72, 19, "Picture unavailable. Add a personal image or skip this review.", nvgRGB(91, 110, 130));
                 if (frame.back)
                 {
                     const float size = std::min(43.0f, (panel - 64) / std::max<size_t>(1, card->kana.size() / 3));
-                    label(vg, width / 2, 350, size, card->kana, ink, NVG_ALIGN_CENTER);
-                    label(vg, width / 2, 404, 16, card->romaji, nvgRGB(96, 114, 132), NVG_ALIGN_CENTER);
+                    label(vg, center, 292, size, card->kana, ink, NVG_ALIGN_CENTER);
+                    label(vg, center, 342, 16, card->romaji, nvgRGB(96, 114, 132), NVG_ALIGN_CENTER);
+                    paragraph(vg, left + 24, 369, panel - 48, 15, card->meaning, ink);
                     if (!instance.flipping && !card->audio.empty())
                     {
                         const bool multiple = card->audio.size() > 1;
-                        button(instance, vg, width / 2 - (multiple ? 216 : 102), 443, 204,
-                            "R  Replay pronunciation", "replay", nvgRGB(52, 86, 119));
-                        if (multiple) button(instance, vg, width / 2 + 12, 443, 204,
+                        const float audio_width = multiple ? (panel - 64) / 2 : std::min(240.0f, panel - 48);
+                        button(instance, vg, multiple ? left + 24 : center - audio_width / 2, 449, audio_width,
+                            "R  Replay", "replay", nvgRGB(52, 86, 119));
+                        if (multiple) button(instance, vg, center + 8, 449, audio_width,
                             "N  Another speaker", "another-speaker", nvgRGB(52, 86, 119));
                     }
                     if (!instance.flipping)
-                        label(vg, width / 2, 496, 11, instance.audio_status, nvgRGB(99, 116, 134), NVG_ALIGN_CENTER);
+                        label(vg, center, 496, 11, instance.audio_status, nvgRGB(99, 116, 134), NVG_ALIGN_CENTER);
                 }
             }
         }
@@ -504,7 +617,7 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
             rect(vg, left, 96, panel, 422, nvgRGBA(15, 30, 50, static_cast<unsigned char>(frame.shade * 255)), 22);
         nvgRestore(vg);
         if (instance.flipping)
-            label(vg, width / 2, 557, 15, "Turning card...", muted, NVG_ALIGN_CENTER);
+            label(vg, center, 557, 15, "Turning card...", muted, NVG_ALIGN_CENTER);
         else if (instance.review->revealed() && visual_ready)
         {
             const float half = (panel - 16) / 2;
@@ -525,12 +638,12 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
                 : "\n" + card->audio.at(instance.audio_index).attribution;
             paragraph(vg, left, 598, panel, 10, credit + audio_credit, muted);
         }
-        else label(vg, width / 2, 603, 13, production ? "Recall the Japanese word. Reveal when ready." : "Recall the meaning. Reveal when ready.", muted, NVG_ALIGN_CENTER);
+        else label(vg, center, 603, 13, production ? "Recall the Japanese word. Reveal when ready." : "Recall the meaning. Reveal when ready.", muted, NVG_ALIGN_CENTER);
     }
     else
     {
         rect(vg, left, 96, panel, 422, nvgRGB(29, 45, 65), 22);
-        label(vg, width / 2, 236, 30, instance.review->blocked() ? "Review unavailable"
+        label(vg, center, 236, 30, instance.review->blocked() ? "Review unavailable"
             : instance.review->deck_size() == 0 ? "Your deck is empty"
             : instance.review->batch_finished() ? "Session complete"
             : instance.review->due_count() > 0 ? "Pictures needed" : "All caught up", white, NVG_ALIGN_CENTER);
@@ -732,6 +845,16 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
             i.pressed_action.clear();
         }
         return 1;
+    }
+    if (event->kind == DRAXUL_PLUGIN_INPUT_WHEEL && !i.guide_visible)
+    {
+        const float x = event->x / i.scale;
+        if (x >= i.queue_left && x < i.queue_left + i.queue_width)
+        {
+            i.queue_scroll = std::clamp(i.queue_scroll - event->delta_y * 72.0f,
+                0.0f, i.queue_max_scroll);
+            changed(i); return 1;
+        }
     }
     if (event->kind == DRAXUL_PLUGIN_INPUT_FOCUS && !event->pressed)
     {

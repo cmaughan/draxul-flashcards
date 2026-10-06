@@ -12,7 +12,7 @@ is the user's explicit preference on 2026-10-02, including the six current entri
 - [x] Test clip selection, missing media, packaging and state preservation.
 - [x] Run appropriate aggregate, same-cache smoke and final Release startup; retain failures and costs.
 - [x] Deliver coverage, playable samples and updated docs without committing/pushing.
-- [ ] Fill the four remaining human-audio gaps and obtain 2–3 verified native speakers per entry where available.
+- [ ] Fill the five current human-audio gaps and obtain 2–3 verified native speakers per entry where available.
 - [ ] Complete human listening review of curated media and macOS input/audio execution.
 
 ## Constraints and handoff
@@ -92,3 +92,13 @@ The user now explicitly requests committing and pushing everything. This
 supersedes the earlier uncommitted handoff requirement for the implementation,
 licensed media, tests and documentation. The unchecked coverage and listening/
 macOS tasks remain open; publication does not mark this card complete.
+
+## Current deck refresh, 2026-10-06
+
+Card [06](../done/06%20upcoming-cue-column-and-current-deck%20-feature.md) expanded the deck to
+nine entries and added two more pinned human recordings. Four entries now have
+human audio (five clips); eight have any cached pronunciation. The list entry has
+none, while the same four earlier synthetic fallbacks remain labelled. Thus five
+entries still need verified human audio, and no entry yet meets the target of
+2–3 verified native speakers. Source metadata/signal checks are recorded in
+`docs/audio-coverage.md`; human listening and macOS execution remain unchecked.

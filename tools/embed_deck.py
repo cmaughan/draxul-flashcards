@@ -1,4 +1,4 @@
-"""Read-only journal validation and deterministic, translation-free embedding."""
+"""Read-only journal validation and deterministic card/answer embedding."""
 import argparse
 import hashlib
 import json
@@ -127,7 +127,7 @@ def build_deck(source, artwork):
         kana = text_field(word, "kana", 192, True)
         if not all(0x3041 <= ord(c) <= 0x3096 or 0x3099 <= ord(c) <= 0x309f or 0x30a1 <= ord(c) <= 0x30ff or c in " ・" for c in kana):
             raise ValueError("kana must contain hiragana/katakana")
-        text_field(word, "meaning", 512, True)  # Sense information stays private.
+        meaning = text_field(word, "meaning", 512, True)  # Answer side only.
         text_field(word, "pronunciation_guide", 2048)
         romaji = text_field(word, "romaji", 256)
         asset_id = art["by_id"].get(word_id, art["by_kana"].get(kana, ""))
@@ -137,14 +137,14 @@ def build_deck(source, artwork):
         if cue and kana != cue_kana[cue["kind"]]:
             raise ValueError("native cue does not match its spelling")
         audio = [art["audio"][key] for key in art["audio_by_kana"].get(kana, [])]
-        cards.append({"id": word_id, "kana": kana, "romaji": romaji,
+        cards.append({"id": word_id, "kana": kana, "romaji": romaji, "meaning": meaning,
                       "image": asset.get("file", ""), "attribution": cue.get("attribution", asset.get("attribution", "")),
                       "cue": cue.get("kind", "picture"), "cue_subject": cue.get("subject", ""),
                       "audio": [{field: clip[field] for field in ("file", "attribution", "speaker", "synthetic")} for clip in audio]})
     active_kana = {card["kana"] for card in cards}
     if any(card["cue_subject"] and card["cue_subject"] not in active_kana for card in cards):
         raise ValueError("native cue depends on vocabulary outside this deck")
-    return {"schema_version": 4, "kind": "bidirectional", "cards": sorted(cards, key=lambda c: c["id"])}
+    return {"schema_version": 5, "kind": "bidirectional", "cards": sorted(cards, key=lambda c: c["id"])}
 
 
 def generate(source, artwork, output):
