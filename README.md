@@ -245,9 +245,24 @@ stable deck order breaks ties. One Remembered grade raises the stage and clears
 the relearning priority, so a historical mistake does not count forever. Future
 and cooling-down cards appear under Later, ordered by effective eligibility time,
 and are never brought forward to fill a batch. A currently shown card stays first
-until it is graded/skipped or invalidated by another pane's grade.
+until it is graded/skipped or invalidated by another pane's grade. A revealed
+answer remains visible; a stale grade is rejected after checking saved progress.
 
 The tradeoff is that a small deck can become temporarily caught up even when its
 other directions have never been graded, and a backlog of relearning/ordinary
 reviews can postpone new cards. This policy uses explicit grades, never inferred
 correctness or passive viewing.
+
+## Shared scheduling and conversation results
+
+Set `learning_directory` to the locally available learning folder to share
+explicit grades and scheduling across devices. Immutable events and aggregate
+bootstrap checkpoints preserve existing scores and allow offline grades to
+converge after delivery. Local recall keeps schema 1; summaries are disposable.
+Imports preserve a revealed answer and reject a stale grade. The app retains
+cached scheduling and pending grades when the folder is unavailable.
+
+See [the synchronization contract](docs/review-sync.md) for configuration,
+baseline/conflict policy, bounds, freshness limitations and the bounded
+read-only conversation evidence command. No exposure, vocabulary additions or
+mastery assumptions are inferred from grades.

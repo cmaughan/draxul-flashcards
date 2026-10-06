@@ -87,6 +87,9 @@ def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=T
             else:
                 raise RuntimeError("Host did not render a ready product frame")
             for key in keys:
+                if callable(key):
+                    key()  # Inject a peer-history arrival at an actual input barrier.
+                    continue
                 if isinstance(key, tuple):
                     _, x, y = key
                     position = (y << 16) | x

@@ -32,7 +32,8 @@ add_custom_target(draxul-flashcards-deck-check
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_deck.py"
     COMMENT "Validating and embedding flashcard cues and answers" VERBATIM)
 
-add_library(draxul-flashcards-review STATIC src/review.cpp src/review.h src/review_lock.cpp src/review_lock.h)
+add_library(draxul-flashcards-review STATIC src/review.cpp src/review.h src/review_lock.cpp src/review_lock.h
+    src/review_export.cpp src/review_export.h)
 set_target_properties(draxul-flashcards-review PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(draxul-flashcards-review PUBLIC src)
 target_link_libraries(draxul-flashcards-review PRIVATE nlohmann_json::nlohmann_json)
@@ -76,6 +77,6 @@ draxul_register_bundled_plugin(ID dev.draxul.flashcards TARGET draxul-flashcards
     DEPENDENCY_MODE STRICT PRODUCT_TARGETS draxul-flashcards-review draxul-flashcards-plugin
     COPY_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/assets=>assets"
     COPY_FILES ${_shaders} DEPENDS ${_shader_outputs}
-    TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tests/flashcards_review_tests.cpp"
+    TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/tests/flashcards_review_tests.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/tests/review_export_tests.cpp"
     TEST_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Tests.cmake")
 draxul_configure_internal_targets_in_directory("${CMAKE_CURRENT_SOURCE_DIR}")

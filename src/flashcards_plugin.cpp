@@ -1,5 +1,6 @@
 #include "review.h"
 #include "review_lock.h"
+#include "review_export.h"
 #include "embedded_deck.h"
 #include "flip.h"
 #include "native_cues.h"
@@ -49,6 +50,9 @@ struct Instance
     HostServices services;
     DraxulPluginViewportV2 viewport{};
     std::unique_ptr<flashcards::ReviewSession> review;
+    std::unique_ptr<flashcards::ReviewExport> review_export;
+    std::filesystem::path learning_directory;
+    std::string export_status, export_diagnostic;
     std::vector<unsigned char> font;
     std::map<std::string, int> images;
     std::unique_ptr<IPluginNanoVGPass> pass;
@@ -99,6 +103,45 @@ void changed(Instance& instance)
 {
     instance.services.request_redraw();
     instance.services.notify_presentation_changed();
+}
+std::optional<std::string> read_record(Instance& instance, std::string_view key)
+{
+    if (!instance.services.has_storage()) throw std::runtime_error("No persistent storage service");
+    const auto saved = instance.services.read_json(DRAXUL_PLUGIN_STORAGE_PLUGIN, key);
+    if (saved.result == DRAXUL_PLUGIN_STORAGE_NOT_FOUND) return std::nullopt;
+    if (!saved.ok()) throw std::runtime_error("Storage read failed");
+    return saved.json;
+}
+void save_record(Instance& instance, std::string_view key, std::string_view value)
+{
+    if (instance.services.write_json(DRAXUL_PLUGIN_STORAGE_PLUGIN, key, value) != DRAXUL_PLUGIN_STORAGE_OK)
+        throw std::runtime_error("Storage write failed");
+}
+void flush_results(Instance& instance)
+{
+    if (!instance.review_export) return;
+    std::string diagnostic;
+    try
+    {
+        const auto guard = flashcards::lock_review(instance.services.path(DRAXUL_PLUGIN_PATH_CONFIG));
+        instance.review_export->flush();
+        diagnostic = instance.review_export->error();
+        if (instance.review) instance.review->refresh(true);
+    }
+    catch (const std::exception& error) { diagnostic = error.what(); }
+    const auto pending = instance.review_export->pending();
+    if (diagnostic.empty())
+        instance.export_status = pending == 0 ? "Shared history read locally; Dropbox may still be syncing."
+            : std::to_string(pending) + " grades waiting to export; shared history read locally.";
+    else if (instance.review_export->catching_up())
+        instance.export_status = "Reading shared history; cached schedule retained.";
+    else if (diagnostic.starts_with("Alternative"))
+        instance.export_status = "Shared history read; alternative prior scores retained.";
+    else
+        instance.export_status = std::to_string(pending) + " grades pending; shared sync needs attention. Cached schedule retained.";
+    if (diagnostic != instance.export_diagnostic && !diagnostic.empty())
+        instance.services.log(DRAXUL_PLUGIN_LOG_WARNING, "Flashcards review export: " + diagnostic);
+    instance.export_diagnostic = std::move(diagnostic);
 }
 void stop_audio(Instance& instance)
 {
@@ -212,6 +255,7 @@ void act(Instance& instance, std::string_view action)
     }
     else if (action == "remembered" || action == "again")
     {
+        flush_results(instance); // Import arriving peer grades before the locked stale-grade check.
         if (instance.review->grade(action == "remembered") || !instance.review->revealed())
         {
             instance.queue_scroll = 0;
@@ -219,6 +263,9 @@ void act(Instance& instance, std::string_view action)
             instance.audio_status.clear();
             instance.audio_index = 0;
         }
+        flush_results(instance);
+        if (!instance.review->error().empty())
+            instance.services.log(DRAXUL_PLUGIN_LOG_WARNING, instance.review->error());
     }
     else if (action == "skip" || action == "refresh")
     {
@@ -654,7 +701,9 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
         button(instance, vg, left, 542, panel, "Check due reviews", "refresh", nvgRGB(57, 88, 143));
     }
     if (!instance.review->error().empty())
-        paragraph(vg, left, height - 34, panel, 12, instance.review->error(), nvgRGB(255, 197, 121));
+        paragraph(vg, left, height - 40, panel, 10, instance.review->error(), nvgRGB(255, 197, 121));
+    if (!instance.export_status.empty())
+        paragraph(vg, left, height - 14, panel, 10, instance.export_status, nvgRGB(153, 173, 197));
     nvgRestore(vg);
     if (!instance.frame_ready_logged)
     {
@@ -672,7 +721,7 @@ void* create(const DraxulPluginCreateInfoV2* info)
     try
     {
         const auto config = parse_config_json(*info);
-        if (!config || !config->is_object() || config->size() > 3)
+        if (!config || !config->is_object() || config->size() > 5)
             throw std::runtime_error("Invalid Flashcards configuration");
         for (const auto& [name, value] : config->items())
         {
@@ -712,12 +761,49 @@ void* create(const DraxulPluginCreateInfoV2* info)
                 if (milliseconds < 100 || milliseconds > 3000) throw std::runtime_error("Flip duration outside bounds");
                 instance->flip_duration = milliseconds / 1000.0;
             }
+            else if (name == "learning_directory")
+            {
+                const auto directory = value.get<std::string>();
+                if (directory.size() > 4096 || !std::filesystem::u8path(directory).is_absolute())
+                    throw std::runtime_error("Shared learning directory must be absolute");
+                instance->learning_directory = std::filesystem::u8path(directory);
+            }
             else throw std::runtime_error("Unknown Flashcards configuration");
         }
         instance->viewport = info->initial_viewport;
         instance->font = read_asset(instance->services.plugin_directory() / "assets/NotoSansJP.otf", 16 * 1024 * 1024);
         instance->pass = create_plugin_nanovg_pass({ instance->services.plugin_directory() });
         auto* raw = instance.get();
+        const auto settings = read_record(*raw, "learning-settings-v1");
+        if (instance->learning_directory.empty() && settings)
+        {
+            const auto saved = nlohmann::json::parse(*settings);
+            if (!saved.is_object() || saved.size() != 2 || !saved.at("schema_version").is_number_integer()
+                || saved.at("schema_version") != 1 || !saved.at("directory").is_string())
+                throw std::runtime_error("Invalid shared learning settings");
+            const auto directory = saved.at("directory").get<std::string>();
+            if (directory.size() > 4096 || !std::filesystem::u8path(directory).is_absolute())
+                throw std::runtime_error("Shared learning directory must be absolute");
+            instance->learning_directory = std::filesystem::u8path(directory);
+        }
+        if (!instance->learning_directory.empty())
+        {
+            instance->learning_directory = std::filesystem::weakly_canonical(instance->learning_directory);
+            const auto relative = instance->learning_directory.lexically_relative(
+                std::filesystem::weakly_canonical(instance->services.plugin_directory()));
+            if (!relative.empty() && *relative.begin() != "..")
+                throw std::runtime_error("Shared learning data must be outside the package directory");
+            if (config->contains("learning_directory"))
+                save_record(*raw, "learning-settings-v1", nlohmann::json({{"schema_version", 1},
+                    {"directory", config->at("learning_directory")}}).dump());
+            instance->review_export = std::make_unique<flashcards::ReviewExport>(instance->learning_directory,
+                instance->services.path(DRAXUL_PLUGIN_PATH_CONFIG) / "review-sync-v1",
+                [raw] { return read_record(*raw, "review-exports-v1"); },
+                [raw](std::string_view value) { save_record(*raw, "review-exports-v1", value); },
+                [raw] { return read_record(*raw, "recall-v1"); },
+                [raw](std::string_view value) { save_record(*raw, "recall-v1", value); });
+            flush_results(*raw);
+        }
         auto cards = flashcards::parse_deck(flashcards::embedded::deck);
         if (!instance->audio_directory.empty())
         {
@@ -745,17 +831,9 @@ void* create(const DraxulPluginCreateInfoV2* info)
             instance->guide_visible = !instance->guide_acknowledged;
         }
         instance->review = std::make_unique<flashcards::ReviewSession>(std::move(cards),
-            [raw]() -> std::optional<std::string> {
-                if (!raw->services.has_storage())
-                    throw std::runtime_error("No persistent storage service");
-                auto saved = raw->services.read_json(DRAXUL_PLUGIN_STORAGE_PLUGIN, "recall-v1");
-                if (saved.result == DRAXUL_PLUGIN_STORAGE_NOT_FOUND)
-                    return std::nullopt;
-                if (!saved.ok()) throw std::runtime_error("Storage read failed");
-                return saved.json;
-            }, [raw](std::string_view value) {
-                if (raw->services.write_json(DRAXUL_PLUGIN_STORAGE_PLUGIN, "recall-v1", value) != DRAXUL_PLUGIN_STORAGE_OK)
-                    throw std::runtime_error("Storage write failed");
+            [raw] { return read_record(*raw, "recall-v1"); }, [raw](std::string_view value) {
+                if (raw->review_export) raw->review_export->commit(value);
+                else save_record(*raw, "recall-v1", value);
             }, flashcards::unix_now, [raw] {
                 return flashcards::lock_review(raw->services.path(DRAXUL_PLUGIN_PATH_CONFIG));
             });
@@ -865,7 +943,10 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
 DraxulPluginTickResultV2 tick(void* opaque, const DraxulPluginTickInfoV2*)
 {
     auto& i = *static_cast<Instance*>(opaque);
-    if (!i.visible || i.quiesced || i.guide_visible) return tick_result(true, DRAXUL_PLUGIN_NO_DEADLINE);
+    if (!i.visible || i.quiesced) return tick_result(true, DRAXUL_PLUGIN_NO_DEADLINE);
+    if (!i.flipping) flush_results(i);
+    const auto retry_delay = i.review_export && i.review_export->catching_up() ? 1'000'000'000 : 30'000'000'000;
+    if (i.guide_visible) return tick_result(true, i.review_export ? retry_delay : DRAXUL_PLUGIN_NO_DEADLINE);
     if (i.flipping)
     {
         if (flashcards::sample_flip(steady_seconds() - i.flip_started, i.flip_duration).finished)
@@ -881,7 +962,7 @@ DraxulPluginTickResultV2 tick(void* opaque, const DraxulPluginTickInfoV2*)
         else return tick_result(true, 16'666'667, true);
     }
     if (!i.review->current()) i.review->refresh();
-    return tick_result(true, 30'000'000'000, true);
+    return tick_result(true, retry_delay, true);
 }
 DraxulPluginRenderResultV2 vulkan(void* opaque, const DraxulPluginVulkanFrameV2* frame)
 {

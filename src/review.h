@@ -65,7 +65,7 @@ public:
     using Clock = std::function<int64_t()>;
     using Lock = std::function<std::shared_ptr<void>()>;
     ReviewSession(std::vector<Card> cards, Read read, Save save, Clock clock = unix_now, Lock lock = {});
-    void refresh();
+    void refresh(bool preserve_error = false);
     void start_batch();
     bool flip();
     bool grade(bool remembered);
@@ -97,7 +97,7 @@ private:
     Clock clock_;
     Lock lock_;
     std::optional<size_t> current_;
-    int expected_reviews_ = 0;
+    Progress expected_progress_;
     int batch_grades_ = 0;
     bool revealed_ = false, blocked_ = false, image_ready_ = false;
     std::string error_;

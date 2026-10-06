@@ -218,15 +218,15 @@ std::string ReviewSession::key(const Card& card) const
 }
 const Card* ReviewSession::current() const { return current_ ? &cards_[*current_] : nullptr; }
 
-void ReviewSession::refresh()
+void ReviewSession::refresh(bool preserve_error)
 {
     try
     {
         const auto text = read_();
         state_ = text ? parse_state(*text) : State{};
+        if (!preserve_error || blocked_) error_.clear();
         blocked_ = false;
-        error_.clear();
-        if (current_ && eligible_due(cards_[*current_], state_) > clock_())
+        if (current_ && !revealed_ && eligible_due(cards_[*current_], state_) > clock_())
             current_.reset();
         if (!current_)
             select();
@@ -253,7 +253,7 @@ void ReviewSession::select()
         if (due <= now)
         {
             current_ = i;
-            expected_reviews_ = entry == state_.end() ? 0 : entry->second.reviews;
+            expected_progress_ = entry == state_.end() ? Progress{} : entry->second;
             break;
         }
     }
@@ -350,11 +350,11 @@ bool ReviewSession::grade(bool remembered)
         const auto card_key = key(*current());
         auto& p = next[card_key];
         const auto now = clock_();
-        if (p.reviews != expected_reviews_ || eligible_due(*current(), next) > now)
+        if (p != expected_progress_ || eligible_due(*current(), next) > now)
         {
             state_ = std::move(next);
             select();
-            error_ = "This card was already graded in another pane. Its saved schedule was kept.";
+            error_ = "New review results changed this card. Its saved schedule was kept; the stale grade was not applied.";
             return false;
         }
         if (now < 0 || now > max_time - 30 * 86400)
@@ -383,7 +383,7 @@ bool ReviewSession::grade(bool remembered)
     }
     catch (...)
     {
-        error_ = "Grade was not saved. Review state was preserved; retry or reopen after fixing storage.";
+        error_ = "Grade save could not be confirmed. Retry or reopen after fixing storage; saved progress is preserved.";
         return false;
     }
 }

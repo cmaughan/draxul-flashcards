@@ -14,6 +14,7 @@ is the user's explicit preference on 2026-10-02, including the six current entri
 - [x] Deliver coverage, playable samples and updated docs without committing/pushing.
 - [ ] Fill the five current human-audio gaps and obtain 2–3 verified native speakers per entry where available.
 - [ ] Complete human listening review of curated media and macOS input/audio execution.
+- [ ] On macOS, validate shared-folder startup/import, offline convergence and revealed-answer preservation from [shared scheduling slice 07](../done/07%20shared-learning-review-results%20-feature.md); Windows execution and POSIX code inspection are recorded there.
 
 ## Constraints and handoff
 

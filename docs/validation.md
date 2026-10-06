@@ -301,3 +301,58 @@ The standard Debug host timeout remains explicitly transferred to Draxul card 65
 natural-speaker/listening/macOS gates remain in product card 04. The user approved
 publication here. Shared Dropbox result exports are a separately authorized next
 slice and are not part of this checkpoint.
+
+## Shared scheduling checkpoint, 2026-10-06
+
+The next slice adds two-way replay of immutable explicit grade events and
+pre-sync aggregate checkpoints, a durable SDK outbox/cache, and a bounded
+read-only conversation reader. See [review-sync.md](review-sync.md) for replay,
+baseline alternatives, offline duplication, stale grading and freshness bounds.
+Recall remains schema 1; prior scores are not fabricated into individual events.
+No app operation writes the personal vocabulary/exposure journal.
+
+| Gate | Result and measured cost |
+|---|---|
+| Initial export-only focused iteration | Passed 65 assertions/5 cases, 0.16 s; build 92.54 s, outer 93.01 s. Configure 72.5 s, generate 1.9 s. Superseded by two-way scheduling. |
+| Two-way focused diagnosis | First 8/9 cases passed (123/124 assertions), 0.78 s; configure 70.0 s, generate 1.7 s. A fixture advanced one device beyond the five-minute clock tolerance; clocks were aligned. Next 8/9 passed (121/122 assertions), 1.52 s; incremental build 15.27 s. Large-checkpoint catch-up expectations now allow bounded polling. |
+| First eight-group aggregate | Passed 8/8 in 348.72 s (runner 348.86 s), incremental build 15.07 s. Model 2.89 s, generator 2.32 s, reader 0.28 s, native cues 130.19 s, normal render 64.35 s, queue 68.69 s, audio 23.01 s, exports/three-device convergence 62.46 s. |
+| Native rejection-message diagnosis | A new stale-answer test exercised the preceding package before rebuilding and reproduced the rejection explanation being cleared by passive refresh. Aggregate 7/8, 363.43 s (runner 363.56 s), build 15.91 s. Model/generator/reader and other captures passed. Passive refresh now preserves the explanation, and rejected grades are logged. |
+| Verified eight-group aggregate | Passed 8/8 in 364.60 s (runner 364.72 s), incremental build 15.76 s. Model: 634 assertions/28 cases, 3.94 s; generator 2.19 s; eight reader cases 0.40 s. Exports including stale grading 70.45 s, native cues 133.69 s, normal render 66.27 s, queue 70.54 s, audio 23.63 s. |
+| Final footer QA | The functional aggregate preceded a spacing-only correction after visual inspection. Debug app/package rebuilt in 14.54 s, no reconfigure; a build help probe is interpreted as a build by do.py. Two additional packaged normal/narrow captures passed with exactly one imported fixture grade and a retained rejection diagnostic. Caption, error and sync status no longer overlap. Capture time was not separately measured. A private QA helper's initial path read used the Windows default encoding; it failed before app launch and was corrected to UTF-8. |
+| Standard same-cache Debug smoke | Timed out at its 30 s bound; owned PID 76388 stopped. This remains transferred to Draxul pending card 65. No cause or resolution is inferred. |
+| Actual-profile Flashcards startup/setup | Passed exit 0 with frame readiness. Shared settings/checkpoint written through the packaged SDK; existing recall remained byte-for-byte identical, vocabulary unchanged, and no individual grade events created. The reader verified the aggregate baseline separately. Startup time was not separately measured. Private paths, scores and history stay outside Git. |
+
+Release build/startup passed: `py do.py run release --console -- --smoke-test
+--plugin dev.draxul.flashcards` exited 0. Build 86.32 s, configure 69.4 s,
+generate 1.8 s, sixteen incremental steps. Startup/outer time was not separately
+measured.
+
+The isolated export demonstration uses actual native input and persisted SDK
+records on two disconnected fixture profiles, then delivery/reopen and a third
+fresh profile. Both distinct grades survive exactly once; all three schedules
+match the reader's reconstruction. A peer result arriving after actual reveal
+causes a stale click to be rejected without producing another event. Fixture
+roots remain in ignored build output and never touch the personal shared folder.
+
+Final captures are `footer-normal.png` (900x760), `footer-narrow.png` (620x720),
+`export-stale-rejected.png`, and the export lifecycle images under
+`build-ninja-debug/flashcards-exports/`. `fixture-export-report.json` identifies
+fixture provenance and three-device convergence. Logs are retained under the
+same ignored Debug tree. No render references were blessed.
+
+Windows execution passed; the common state/replay logic and POSIX exclusive
+publication/fsync paths were inspected. macOS/Metal execution is not claimed.
+Platform follow-up remains tracked in pending card 04, including the new shared
+folder startup/import/reveal path. The standard Debug host timeout remains in
+Draxul card 65; those are separate follow-ups, not discarded validation gates.
+
+Publication fetched the independently published host update `95493166` and
+fast-forwarded Draxul before adoption. Post-integration validation passed all
+8/8 product groups in 365.51 s (runner 365.64 s): model 4.82 s, reader 0.45 s,
+generator 2.58 s, cues 134.60 s, export/convergence/stale rejection 70.51 s,
+queue 70.56 s, normal render 66.39 s and audio 23.43 s. Debug build 129.71 s,
+configure 68.8 s, generate 1.9 s, 221 Ninja steps. Same-cache default smoke again
+timed out at 30 s and stopped owned PID 79208; no timeout fix is inferred.
+Final updated-host Release plugin startup exited 0: build 121.58 s, configure
+70.0 s, generate 1.8 s, 114 Ninja steps. These runs supersede the preceding-host
+integration evidence; compilation/startup were not individually timed.
