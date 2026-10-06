@@ -218,6 +218,14 @@ std::string ReviewSession::key(const Card& card) const
 }
 const Card* ReviewSession::current() const { return current_ ? &cards_[*current_] : nullptr; }
 
+Progress ReviewSession::saved_progress(const Card& card, const State& state, bool opposite) const
+{
+    const auto card_key = opposite
+        ? (card.direction == Direction::Recognition ? "production:" : "recognition:") + card.id : key(card);
+    const auto entry = state.find(card_key);
+    return entry == state.end() ? Progress{} : entry->second;
+}
+
 void ReviewSession::refresh(bool preserve_error)
 {
     try
@@ -226,7 +234,10 @@ void ReviewSession::refresh(bool preserve_error)
         state_ = text ? parse_state(*text) : State{};
         if (!preserve_error || blocked_) error_.clear();
         blocked_ = false;
-        if (current_ && !revealed_ && eligible_due(cards_[*current_], state_) > clock_())
+        if (current_ && !revealed_
+            && ((!review_ahead_ && eligible_due(cards_[*current_], state_) > clock_())
+                || saved_progress(*current(), state_) != expected_progress_
+                || (review_ahead_ && saved_progress(*current(), state_, true) != expected_other_progress_)))
             current_.reset();
         if (!current_)
             select();
@@ -248,12 +259,12 @@ void ReviewSession::select()
     const auto now = clock_();
     for (size_t i : ordered_indices(now))
     {
-        const auto entry = state_.find(key(cards_[i]));
         const auto due = eligible_due(cards_[i], state_);
-        if (due <= now)
+        if (review_ahead_ || due <= now)
         {
             current_ = i;
-            expected_progress_ = entry == state_.end() ? Progress{} : entry->second;
+            expected_progress_ = saved_progress(cards_[i], state_);
+            expected_other_progress_ = saved_progress(cards_[i], state_, true);
             break;
         }
     }
@@ -331,8 +342,9 @@ void ReviewSession::skip()
         skipped_.push_back(key(*card));
     select();
 }
-void ReviewSession::start_batch()
+void ReviewSession::start_batch(bool review_ahead)
 {
+    review_ahead_ = review_ahead;
     batch_grades_ = 0;
     skipped_.clear();
     current_.reset();
@@ -350,7 +362,9 @@ bool ReviewSession::grade(bool remembered)
         const auto card_key = key(*current());
         auto& p = next[card_key];
         const auto now = clock_();
-        if (p != expected_progress_ || eligible_due(*current(), next) > now)
+        if (p != expected_progress_
+            || (review_ahead_ && saved_progress(*current(), next, true) != expected_other_progress_)
+            || (!review_ahead_ && eligible_due(*current(), next) > now))
         {
             state_ = std::move(next);
             select();
@@ -376,6 +390,7 @@ bool ReviewSession::grade(bool remembered)
         }
         save_(serialize_state(next));
         state_ = std::move(next);
+        if (review_ahead_) skipped_.push_back(card_key);
         ++batch_grades_;
         error_.clear();
         select();

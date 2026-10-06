@@ -69,15 +69,47 @@ def main():
         capture(args.exe,args.out,'queue-narrow-front',env,dimensions=(620,720))
         capture(args.exe,args.out,'queue-narrow-back',env,[32],dimensions=(620,720))
         if state.read_bytes()!=saved: raise RuntimeError('Narrow preview changed progress')
-        capture(args.exe,args.out,'queue-scroll',env,[("click",235,705)])
+        capture(args.exe,args.out,'queue-narrow-scroll',env,
+                [("drag",(161,160),(370,485))],dimensions=(620,720))
+        if strip(args.out/'queue-narrow-scroll.bmp',50,150,175,485) == strip(args.out/'queue-narrow-front.bmp',50,150,175,485):
+            raise RuntimeError('The narrow queue thumb did not drag')
+        capture(args.exe,args.out,'queue-narrow-track',env,
+                [("click",161,490)],dimensions=(620,720))
+        if strip(args.out/'queue-narrow-scroll.bmp',50,150,175,485) != strip(args.out/'queue-narrow-track.bmp',50,150,175,485):
+            raise RuntimeError('Narrow dragging did not clamp at the end like a track click')
+        capture(args.exe,args.out,'queue-scroll',env,[("drag",(231,197),(500,640))])
         if state.read_bytes()!=saved: raise RuntimeError('Scrolling changed progress')
         if strip(args.out/'queue-scroll.bmp',90,235,205,675) == strip(args.out/'queue-normal-front.bmp',90,235,205,675):
-            raise RuntimeError('The queue scroll control did not change its visible previews')
+            raise RuntimeError('Dragging the queue thumb did not change its visible previews')
+        capture(args.exe,args.out,'queue-scroll-reset',env,
+                [("drag",(231,197),(500,640)),("drag",(231,640),(231,180))])
+        if strip(args.out/'queue-scroll-reset.bmp',90,222,205,650) != strip(args.out/'queue-normal-front.bmp',90,222,205,650):
+            raise RuntimeError('Dragging back to the top did not restore the preview queue')
+        capture(args.exe,args.out,'queue-track',env,[("click",231,550)])
+        if strip(args.out/'queue-track.bmp',90,222,205,650) == strip(args.out/'queue-normal-front.bmp',90,222,205,650):
+            raise RuntimeError('Clicking the scrollbar track did not scroll')
+        if state.read_bytes()!=saved: raise RuntimeError('Dragging/track clicks rewrote scores')
         capture(args.exe,args.out,'queue-after-grade',env,[32,ord('2')])
         changed=json.loads(state.read_text())['cards']
         key='production:'+target['id']
         if changed[key]['reviews']!=2 or any(changed[k]!=v for k,v in records.items() if k!=key):
             raise RuntimeError('Grading did not preserve unrelated directions/schedules')
+        # The grade cooled both target directions; every other card is future.
+        # Clicking Review again must start immediately without rewriting scores.
+        history=state.read_bytes()
+        capture(args.exe,args.out,'queue-complete-narrow',env,dimensions=(620,720))
+        capture(args.exe,args.out,'queue-review-again',env,[("click-once",740,620)])
+        if state.read_bytes()!=history: raise RuntimeError('Starting another round changed scores')
+        log=(args.out/'queue-review-again.log').read_text(errors='replace')
+        if 'Flashcards action review-again' not in log:
+            raise RuntimeError('The immediate review button was not activated')
+        if 'Flashcards action flip' in log:
+            raise RuntimeError('Starting a round revealed an answer without explicit input')
+        capture(args.exe,args.out,'queue-repeat-grade',env,[("click-once",740,620),32,ord('2')])
+        repeated=json.loads(state.read_text())['cards']
+        recognition='recognition:'+target['id']
+        if repeated[recognition]['reviews']!=2 or any(repeated[k]!=v for k,v in changed.items() if k!=recognition):
+            raise RuntimeError('Immediate round did not save exactly one explicit grade inside cooldown')
         for card in deck:
             if card['image'] not in {'photo-cue.png','list-cue.png','today-cue.png'}:
                 continue
@@ -87,7 +119,7 @@ def main():
             before=state.read_bytes()
             capture(args.exe,args.out,'new-'+card['image'].split('-')[0]+'-back',env,[32])
             if state.read_bytes()!=before: raise RuntimeError('New cue reveal rewrote review history')
-        print('Normal/narrow cue-only previews, answer separation, read-only scrolling and actual grade persistence passed.')
+        print('Normal/narrow cue-only previews, drag/track scrolling, immediate repeat and exact grade persistence passed.')
 
 
 if __name__=='__main__': main()

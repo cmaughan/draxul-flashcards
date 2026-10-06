@@ -66,7 +66,9 @@ public:
     using Lock = std::function<std::shared_ptr<void>()>;
     ReviewSession(std::vector<Card> cards, Read read, Save save, Clock clock = unix_now, Lock lock = {});
     void refresh(bool preserve_error = false);
-    void start_batch();
+    // An explicit additional round bypasses due times, once per direction.
+    // Starting it is read-only; grades retain the usual durable score path.
+    void start_batch(bool review_ahead = false);
     bool flip();
     bool grade(bool remembered);
     void skip();
@@ -83,12 +85,14 @@ public:
     std::vector<QueuedCard> queue() const;
     bool image_ready() const { return image_ready_; }
     bool batch_finished() const { return batch_grades_ >= 20; }
+    bool reviewing_ahead() const { return review_ahead_; }
     size_t remaining_grades() const { return static_cast<size_t>(std::max(0, 20 - batch_grades_)); }
     void set_image_ready(bool ready) { image_ready_ = ready; }
 private:
     void select();
     std::vector<size_t> ordered_indices(int64_t now) const;
     int64_t eligible_due(const Card& card, const State& state) const;
+    Progress saved_progress(const Card& card, const State& state, bool opposite = false) const;
     std::string key(const Card& card) const;
     std::vector<Card> cards_;
     State state_;
@@ -98,8 +102,10 @@ private:
     Lock lock_;
     std::optional<size_t> current_;
     Progress expected_progress_;
+    Progress expected_other_progress_;
     int batch_grades_ = 0;
     bool revealed_ = false, blocked_ = false, image_ready_ = false;
+    bool review_ahead_ = false;
     std::string error_;
     std::vector<std::string> skipped_;
 };

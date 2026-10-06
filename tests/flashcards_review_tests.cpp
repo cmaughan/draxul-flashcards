@@ -422,6 +422,120 @@ TEST_CASE("Large due decks stop after twenty explicit grades and allow another b
     REQUIRE(storage.writes == 21);
 }
 
+TEST_CASE("Explicit additional rounds review future and cooling directions once without resetting scores", "[flashcards]")
+{
+    DurableStore storage;
+    storage.cards.push_back(storage.cards.front());
+    storage.cards.back().direction = Direction::Production;
+    auto review = storage.open();
+    REQUIRE(recalled(review, true));
+    REQUIRE_FALSE(review.current());
+    const auto saved = storage.saved;
+    review.start_batch();
+    REQUIRE_FALSE(review.current());
+    review.start_batch(true);
+    REQUIRE(review.reviewing_ahead());
+    REQUIRE(storage.saved == saved);
+    REQUIRE(review.current()->direction == Direction::Production);
+    REQUIRE(review.due_count() == 0); // Real eligibility stays separate from the override.
+    REQUIRE(review.queue().size() == 2);
+    REQUIRE_FALSE(review.queue()[0].due_now);
+    REQUIRE_FALSE(review.queue()[1].due_now);
+    review.refresh(); // Shared-history polling retains this explicitly requested round.
+    REQUIRE(review.current()->direction == Direction::Production);
+    REQUIRE(recalled(review, false));
+    REQUIRE(review.current()->direction == Direction::Recognition);
+    REQUIRE(review.queue().size() == 1);
+    REQUIRE(recalled(review, true));
+    REQUIRE_FALSE(review.current());
+    REQUIRE(review.queue().empty());
+    review.refresh();
+    REQUIRE_FALSE(review.current()); // Never loops on freshly graded cards.
+    const auto history = parse_state(*storage.saved);
+    REQUIRE(history.at("recognition:apple").reviews == 2);
+    REQUIRE(history.at("recognition:apple").due == storage.now + 3 * 86400);
+    REQUIRE(history.at("production:apple").forgotten == 1);
+    REQUIRE(history.at("production:apple").due == storage.now + 600);
+    REQUIRE(storage.writes == 3);
+    REQUIRE_FALSE(storage.open().current()); // A reopen restores scheduled selection.
+    review.start_batch(true);
+    REQUIRE(review.current());
+    review.skip();
+    review.skip();
+    REQUIRE_FALSE(review.current());
+    REQUIRE(parse_state(*storage.saved) == history);
+    review.start_batch();
+    REQUIRE_FALSE(review.reviewing_ahead());
+    REQUIRE_FALSE(review.current());
+}
+
+TEST_CASE("Additional rounds reject peer grades in either direction and preserve failed saves", "[flashcards]")
+{
+    DurableStore storage;
+    storage.cards.push_back(storage.cards.front());
+    storage.cards.back().direction = Direction::Production;
+    auto visible = storage.open();
+    visible.start_batch(true);
+    visible.set_image_ready(true);
+    REQUIRE(visible.flip());
+    auto peer = storage.open();
+    peer.skip(); // Peer grades the opposite direction of the visible answer.
+    REQUIRE(recalled(peer, true));
+    const auto imported = storage.saved;
+    visible.refresh(true);
+    REQUIRE(visible.revealed());
+    REQUIRE_FALSE(visible.grade(false));
+    REQUIRE(storage.saved == imported);
+    REQUIRE_FALSE(visible.error().empty());
+    storage.fail = true;
+    REQUIRE_FALSE(recalled(visible, true));
+    REQUIRE(visible.revealed());
+    REQUIRE(storage.saved == imported);
+    storage.fail = false;
+    REQUIRE(visible.grade(true));
+    REQUIRE(storage.writes == 2);
+    // Same-direction peer changes must also be rejected despite the bypass.
+    visible.start_batch(true);
+    REQUIRE(visible.flip());
+    visible.set_image_ready(true);
+    peer.start_batch(true);
+    REQUIRE(recalled(peer, false));
+    const auto latest = storage.saved;
+    REQUIRE_FALSE(visible.grade(true));
+    REQUIRE(storage.saved == latest);
+    storage.saved = "corrupt";
+    visible.start_batch(true);
+    REQUIRE(visible.blocked());
+    REQUIRE_FALSE(visible.current());
+    REQUIRE_FALSE(visible.grade(true));
+    REQUIRE(*storage.saved == "corrupt");
+}
+
+TEST_CASE("Additional rounds retain the twenty-grade limit with a future backlog", "[flashcards]")
+{
+    DurableStore storage;
+    storage.cards.clear();
+    State prior;
+    for (int i = 0; i < 21; ++i)
+    {
+        const auto id = "card-" + std::to_string(i);
+        storage.cards.push_back({id, "kana", "", "image.png", ""});
+        prior["recognition:" + id] = {1, storage.now + 86400, storage.now - 86400, 1, 1, 0, 0};
+    }
+    storage.saved = serialize_state(prior);
+    auto review = storage.open();
+    REQUIRE_FALSE(review.current());
+    review.start_batch(true);
+    for (int i = 0; i < 20; ++i) REQUIRE(recalled(review, true));
+    REQUIRE(review.batch_finished());
+    REQUIRE_FALSE(review.current());
+    REQUIRE(review.queue().size() == 1);
+    review.start_batch(true);
+    REQUIRE(review.current()->id == "card-20"); // Unreviewed future card leads the next round.
+    REQUIRE(recalled(review, false));
+    REQUIRE(storage.writes == 21);
+}
+
 TEST_CASE("Native cue additions retain history and independent schedules without image files", "[flashcards]")
 {
     DurableStore storage;

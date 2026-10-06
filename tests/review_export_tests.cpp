@@ -100,6 +100,39 @@ TEST_CASE("Explicit grades keep durable export intent through offline reopen and
     REQUIRE(file_json(fixture.root / "shared/flashcard-reviews" / box["producer_id"].get<std::string>() / "summary-v1.json")["event_count"] == 1);
 }
 
+TEST_CASE("Immediate additional rounds export only explicit grades and converge on a fresh device", "[flashcards][exports]")
+{
+    ExportFixture first, fresh;
+    fresh.sequence = 100;
+    std::filesystem::create_directories(first.root / "shared");
+    auto exports = first.exporter();
+    auto session = first.session(exports);
+    REQUIRE(grade(session, false));
+    REQUIRE(exports.flush());
+    REQUIRE_FALSE(session.current());
+    const auto before = first.recall;
+    ++first.now; // Still inside the ten-minute cooldown.
+    session.start_batch(true);
+    REQUIRE(first.recall == before);
+    REQUIRE(first.events() == 1);
+    session.skip();
+    REQUIRE(first.events() == 1);
+    session.start_batch(true);
+    REQUIRE(grade(session, true));
+    REQUIRE_FALSE(session.current());
+    REQUIRE(exports.flush());
+    const auto repeated = first.recall;
+    REQUIRE(parse_state(*repeated).at("recognition:fixture-word").reviews == 2);
+    REQUIRE(parse_state(*repeated).at("recognition:fixture-word").remembered == 1);
+    REQUIRE(first.events() == 2);
+    fresh.now = first.now;
+    auto imported = fresh.exporter(first.root / "shared");
+    REQUIRE(imported.flush());
+    REQUIRE(parse_state(*fresh.recall) == parse_state(*repeated));
+    REQUIRE_FALSE(fresh.session(imported).current());
+    REQUIRE(first.events() == 2);
+}
+
 TEST_CASE("A failed recall save aborts prepared export while an after-replacement error never double grades", "[flashcards][exports]")
 {
     ExportFixture fixture;

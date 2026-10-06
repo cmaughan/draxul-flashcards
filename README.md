@@ -56,16 +56,20 @@ word list itself is still personal data.
 - Missing audio/device: an unavailable message appears; visual grading still works.
 - Missing image: clearly labeled, grading disabled, Skip advances without a grade.
 - Invalid/unreadable review state: preserved, grading blocked. Repair the file or
-  storage issue, then use Check due cards; the plugin never silently resets it.
+  storage issue, then use Check due reviews; the plugin never silently resets it.
 
 Unseen cards are due immediately. Unaided remembered grades use intervals of 1, 3,
 7, 14, 30, then repeating 30 days from grading time. Again resets the stage and
 retries after 10 minutes. These are simple documented design choices,
 not a claim about Fluent Forever's proprietary algorithm or mastery.
 
-Sessions stop after 20 grades to bound a large backlog. Check due cards starts
-another batch. Forgotten cards wait for their retry time rather than reappearing
-immediately. Caps Lock / Num Lock do not disable the controls.
+Sessions stop after 20 grades to bound a large backlog. Check due reviews starts
+another scheduled batch. Review again starts an additional round immediately,
+including future and cooling-down cards. Each direction appears at most once in
+that round; only an explicit Again/Remembered choice updates its existing scores,
+interval and shared history. Starting a round never resets progress. Reopening or
+Check due reviews restores the normal schedule. Caps Lock / Num Lock do not
+disable the controls.
 
 State schema 1 uses `recognition:<stable-word-id>` and `production:<stable-word-id>`
 keys. Existing recognition records retain their dates and counters; new production
@@ -207,8 +211,10 @@ Up next includes the current card marked Now, followed by due cards, with future
 reviews under Later. A larger backlog beyond the 20-grade cap appears under Next
 batch. Read/Say distinguish recognition/production. The queue and main-card selection share one
 ordering function. Grading updates the queue and returns it to the top; skipped
-cards stay out of that batch. Mouse wheel over the column, or Up/Down buttons,
-scroll the column without changing recall. Thumbnails have no click-to-select
+cards stay out of that batch. Drag the scrollbar thumb, click its track, or use
+the mouse wheel over the column to scroll without changing recall. The thumb
+keeps its grab position while dragging and clamps at either end; release, lost
+focus, hide and resize cancel dragging. Thumbnails have no click-to-select
 behavior, answer tooltips, Japanese spelling, romanization or English meaning.
 The grammar preview substitutes a person for the subject spelling.
 
@@ -231,22 +237,26 @@ schema 5 requires them; recall-v1 storage and stable directional IDs stay intact
 
 ### Eligibility and struggling cards
 
-After either direction is explicitly graded, both directions of that word wait
+In scheduled reviews, after either direction is explicitly graded, both directions of that word wait
 ten minutes. Effective eligibility is the later of the direction's own due time
 and the latest saved grade for that word plus 600 seconds. Independent stage,
 counters and stored due dates remain intact. Reopening and concurrent panes use
 the same durable cooldown; grading rereads it under the existing write lock.
 Revealing, audio, browsing and skipping do not start a cooldown.
 
-Only eligible due cards compete for selection. The order is: relearning cards
+Only eligible due cards compete for scheduled selection. The order is: relearning cards
 (stage zero with an explicit forgotten count), other previously graded cards,
 then untouched new cards. Earlier effective due time wins within a group;
 stable deck order breaks ties. One Remembered grade raises the stage and clears
 the relearning priority, so a historical mistake does not count forever. Future
 and cooling-down cards appear under Later, ordered by effective eligibility time,
-and are never brought forward to fill a batch. A currently shown card stays first
+and are never brought forward to fill a scheduled batch. An explicitly requested
+Review again round includes them, labelling available cards This round. It keeps
+the scheduler's ordering and the twenty-grade cap. A currently shown card stays first
 until it is graded/skipped or invalidated by another pane's grade. A revealed
 answer remains visible; a stale grade is rejected after checking saved progress.
+Additional rounds check both directions for peer changes while bypassing the
+due-time gate; they never overwrite a stale answer's history.
 
 The tradeoff is that a small deck can become temporarily caught up even when its
 other directions have never been graded, and a backlog of relearning/ordinary

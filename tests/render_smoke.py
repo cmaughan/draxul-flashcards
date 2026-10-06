@@ -41,6 +41,7 @@ def find_window(pid):
     user.SendMessageW.restype = wintypes.LPARAM
     user.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
     user.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+    user.SetForegroundWindow.argtypes = [wintypes.HWND]
     window = []
     callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     @callback_type
@@ -86,11 +87,65 @@ def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=T
                 time.sleep(0.05)
             else:
                 raise RuntimeError("Host did not render a ready product frame")
+            # SDL discards posted keyboard input when another capture/user
+            # window owns focus. Activate only this exact owned child before
+            # sending its inputs; readiness alone does not establish focus.
+            user.SetForegroundWindow(hwnd)
+            time.sleep(0.15)
             for key in keys:
                 if callable(key):
                     key()  # Inject a peer-history arrival at an actual input barrier.
                     continue
                 if isinstance(key, tuple):
+                    if key[0] == "drag":
+                        _, start, end = key
+                        old = wintypes.POINT()
+                        user.GetCursorPos(ctypes.byref(old))
+                        target = wintypes.POINT()
+                        def move(point, held=False):
+                            target.x, target.y = point
+                            user.ClientToScreen(hwnd, ctypes.byref(target))
+                            if held:
+                                user.SendMessageW(hwnd, 0x200, 1, (point[1] << 16) | point[0])
+                            else:
+                                user.SetCursorPos(target.x, target.y)
+                            time.sleep(0.07)
+                        try:
+                            move(start)
+                            origin = (target.x, target.y)
+                            position = (start[1] << 16) | start[0]
+                            # Establish SDL focus with a stationary thumb click.
+                            user.SendMessageW(hwnd, 0x200, 0, position)
+                            user.SendMessageW(hwnd, 0x201, 1, position)
+                            time.sleep(0.12)
+                            user.SendMessageW(hwnd, 0x200, 1, position)
+                            user.SendMessageW(hwnd, 0x202, 0, position)
+                            time.sleep(0.12)
+                            user.SendMessageW(hwnd, 0x200, 0, position)
+                            user.SendMessageW(hwnd, 0x201, 1, position)
+                            time.sleep(0.12)
+                            for step in range(1, 9):
+                                point = tuple(round(a + (b-a)*step/8) for a,b in zip(start,end))
+                                move(point, held=True)
+                            # SDL takes button coordinates from its last motion.
+                            # Pair the final move/release without an intervening
+                            # delay, and keep input inside this exact child.
+                            user.SendMessageW(hwnd, 0x200, 1, (end[1] << 16) | end[0])
+                            user.SendMessageW(hwnd, 0x202, 0, (end[1] << 16) | end[0])
+                            time.sleep(0.12)
+                            # A later unpressed move must not continue dragging.
+                            user.SendMessageW(hwnd, 0x200, 0, position)
+                            current = wintypes.POINT()
+                            user.GetCursorPos(ctypes.byref(current))
+                            if (current.x, current.y) != origin:
+                                raise RuntimeError("Desktop pointer moved during the synthetic drag; rerun with the mouse idle")
+                        finally:
+                            user.SendMessageW(hwnd, 0x202, 0, position)
+                            current = wintypes.POINT()
+                            user.GetCursorPos(ctypes.byref(current))
+                            if current.x == target.x and current.y == target.y:
+                                user.SetCursorPos(old.x, old.y)
+                        continue
                     _, x, y = key
                     position = (y << 16) | x
                     old = wintypes.POINT()
@@ -105,12 +160,14 @@ def capture(exe, out, name, env, keys=(), delay=5500, config=None, settle_flip=T
                         time.sleep(0.12)
                         user.SendMessageW(hwnd, 0x202, 0, position)
                         time.sleep(0.12)
-                        # The first synthetic click establishes SDL's mouse
-                        # focus for a capture window; the second tests its button.
-                        user.SendMessageW(hwnd, 0x201, 1, position)
-                        time.sleep(0.12)
-                        user.SendMessageW(hwnd, 0x202, 0, position)
-                        time.sleep(0.12)
+                        if key[0] != "click-once":
+                            # Some capture windows need a second click to gain
+                            # SDL focus. Use click-once when the first action
+                            # replaces the controls underneath the pointer.
+                            user.SendMessageW(hwnd, 0x201, 1, position)
+                            time.sleep(0.12)
+                            user.SendMessageW(hwnd, 0x202, 0, position)
+                            time.sleep(0.12)
                     finally:
                         current = wintypes.POINT()
                         user.GetCursorPos(ctypes.byref(current))

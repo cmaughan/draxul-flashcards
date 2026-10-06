@@ -356,3 +356,38 @@ timed out at 30 s and stopped owned PID 79208; no timeout fix is inferred.
 Final updated-host Release plugin startup exited 0: build 121.58 s, configure
 70.0 s, generate 1.8 s, 114 Ninja steps. These runs supersede the preceding-host
 integration evidence; compilation/startup were not individually timed.
+
+## Draggable queue and immediate rounds, 2026-10-06
+
+The Up/Down controls are removed. Thumb dragging preserves its grab offset;
+track clicks centre the thumb, ends clamp, and release/focus loss/hide/resize
+cancel the hold. Wheel input remains limited to the preview viewport. Normal
+scheduled reviews retain the shared cooldown and due-only selection. Review
+again explicitly includes future/cooling cards once per direction, up to twenty
+grades. Starting it preserves scores; chosen outcomes use the existing durable
+shared-event path. Both directional records guard an extra round against stale
+peer grades. Reopening restores the normal schedule.
+
+| Gate | Result and measured cost |
+|---|---|
+| Model iteration before expensive captures | Passed 723 assertions / 32 cases, 4.44 s. Sixteen incremental Ninja steps, build 19.40 s; existing cache, no configure. Covers read-only start, both directions inside cooldown, future backlog/cap, failed saves, stale peer grades and fresh-device export convergence. |
+| Initial queue diagnosis | Passed actual normal/narrow input, drag down/back, track click, immediate start and exactly one explicit repeated grade. Fifteen captures; total elapsed time was not separately measured. |
+| Eight-group aggregate | Six of eight passed, 243.68 s CTest (runner 243.81 s). Nineteen incremental Ninja steps, build 93.21 s including configure 73.5 s / generate 2.0 s. Model passed 725 assertions / 32 cases, 4.79 s; generator 2.36 s; reader 0.45 s; actual export/three-device convergence 75.32 s; normal render 66.69 s; audio 23.90 s. Cue capture lost its posted Reveal key (30.36 s), queue's stronger narrow endpoint check failed (47.37 s). |
+| Native diagnostic rerun | Cue captures passed 134.56 s after explicit owned-window activation. Queue failed 15.93 s because its front captured an unexpected Help face, then a separate queue retry failed the narrow endpoint check at 47.44 s. Two trace-only narrow captures took about 8.5 s each; unrelated pointer motion was present during the held drag. These attempts are retained separately, not counted as functional passes. |
+| Final focused drag diagnosis | A third trace capture passed the endpoint visually, about 8.5 s. Pairing the final posted move/release ensured SDL's release used the test's intended coordinates despite intervening motion. |
+| Expanded queue follow-up | Failed return-to-top assertion, 62.91 s, after passing the narrow endpoint check. Full group remains pending an idle desktop pointer; no eight-group all-pass result is claimed. |
+| Window-directed queue follow-up | Failed preview-column comparison at 15.81 s before reaching drag input. Front captured the Help face unexpectedly again. The native gate remains open; this does not establish a cause or a product regression. Final helper also rejects a drag when the physical desktop pointer moves during its controlled sequence. |
+| Standard same-cache Debug startup | Repeated inherited 30 s timeout, exit 124; runner stopped owned PID 47604. Existing Draxul card 65 owns this host follow-up. |
+| Same-cache Flashcards Debug startup | Passed exit 0, 20.08 s, without rebuilding. Actual profile, no synthetic grades. |
+| Final Release build/startup | Passed exit 0. Sixteen incremental Ninja steps, build 94.50 s including configure 75.7 s / generate 2.2 s. Startup not separately timed. |
+
+The Windows test helper offers one click when its first action replaces the
+controls underneath the pointer. Native OS button holds were tried while
+diagnosing asynchronous SDL release checks, then removed because unrelated
+desktop movement prevents predictable targeting. The final helper directs
+button/motion messages only to its exact child, pairs its final motion/release,
+and avoids warping the cursor during the hold. An idle desktop pointer is needed
+for the expanded queue gate, which remains unchecked in card 08. Fixture profiles
+remain isolated from personal scores/history. Debug/Release plugin startup passed;
+the inherited standard host timeout stays in Draxul card 65. macOS/Metal execution
+and remote CI have not run in this workspace.

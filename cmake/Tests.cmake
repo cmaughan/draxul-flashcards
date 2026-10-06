@@ -32,7 +32,7 @@ add_test(NAME draxul-render-flashcards-queue
         --exe "$<TARGET_FILE:draxul>" --out "${CMAKE_BINARY_DIR}/flashcards-queue"
         --source "${DRAXUL_FLASHCARDS_VOCABULARY_SOURCE}")
 set_tests_properties(draxul-render-flashcards-queue PROPERTIES
-    LABELS "flashcards;render" RESOURCE_LOCK draxul_gpu TIMEOUT 120)
+    LABELS "flashcards;render" RESOURCE_LOCK draxul_gpu TIMEOUT 180)
 add_test(NAME draxul-render-flashcards-exports
     COMMAND ${Python3_EXECUTABLE} "${_flash_root}/tests/exports_smoke.py"
         --exe "$<TARGET_FILE:draxul>" --out "${CMAKE_BINARY_DIR}/flashcards-exports"

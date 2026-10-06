@@ -33,6 +33,7 @@
 namespace
 {
 using namespace draxul::plugin_support;
+constexpr float queue_top = 132, queue_height = 466;
 struct Hit
 {
     float x, y, w, h;
@@ -60,6 +61,8 @@ struct Instance
     float scale = 1;
     float queue_scroll = 0, queue_max_scroll = 0;
     float queue_left = 0, queue_width = 0;
+    float queue_thumb_top = queue_top, queue_thumb_height = 0, queue_drag_offset = 0;
+    bool queue_dragging = false;
     bool visible = true, focused = false, quiesced = false;
     std::set<uint32_t> held_keys;
     bool mouse_down = false;
@@ -103,6 +106,20 @@ void changed(Instance& instance)
 {
     instance.services.request_redraw();
     instance.services.notify_presentation_changed();
+}
+void cancel_pointer(Instance& instance)
+{
+    instance.queue_dragging = false;
+    instance.mouse_down = false;
+    instance.pressed_action.clear();
+}
+void drag_queue(Instance& instance, float y)
+{
+    const float travel = queue_height - instance.queue_thumb_height;
+    if (travel > 0)
+        instance.queue_scroll = std::clamp((y - queue_top - instance.queue_drag_offset) / travel,
+            0.0f, 1.0f) * instance.queue_max_scroll;
+    changed(instance);
 }
 std::optional<std::string> read_record(Instance& instance, std::string_view key)
 {
@@ -200,12 +217,7 @@ void act(Instance& instance, std::string_view action)
 {
     if (instance.quiesced || !instance.visible)
         return;
-    if (action == "queue-up" || action == "queue-down")
-    {
-        instance.queue_scroll = std::clamp(instance.queue_scroll
-            + (action == "queue-up" ? -260.0f : 260.0f), 0.0f, instance.queue_max_scroll);
-        changed(instance); return;
-    }
+    cancel_pointer(instance);
     if (action == "help")
     {
         stop_audio(instance); instance.flipping = false;
@@ -267,13 +279,13 @@ void act(Instance& instance, std::string_view action)
         if (!instance.review->error().empty())
             instance.services.log(DRAXUL_PLUGIN_LOG_WARNING, instance.review->error());
     }
-    else if (action == "skip" || action == "refresh")
+    else if (action == "skip" || action == "refresh" || action == "review-again")
     {
         stop_audio(instance);
         instance.audio_status.clear();
         instance.audio_index = 0;
         if (action == "skip") instance.review->skip();
-        else instance.review->start_batch();
+        else instance.review->start_batch(action == "review-again");
         instance.queue_scroll = 0;
     }
     changed(instance);
@@ -481,7 +493,7 @@ void draw_queue(Instance& instance, NVGcontext* vg, float x, float w)
 {
     instance.queue_left = x; instance.queue_width = w;
     const auto queue = instance.review->queue();
-    constexpr float top = 132, clip_height = 466, row_height = 108;
+    constexpr float top = queue_top, clip_height = queue_height, row_height = 108;
     const auto muted = nvgRGB(153, 173, 197), accent = nvgRGB(132, 211, 192);
     rect(vg, x, 96, w, 502, nvgRGB(25, 40, 58), 16);
     label(vg, x + 12, 107, 15, "Up next", nvgRGB(237, 243, 250));
@@ -490,8 +502,9 @@ void draw_queue(Instance& instance, NVGcontext* vg, float x, float w)
     size_t due_index = 0;
     for (const auto& entry : queue)
     {
-        const std::string group = entry.due_now
-            ? (due_index++ < instance.review->remaining_grades() ? "Due" : "Next batch") : "Later";
+        const std::string group = (entry.due_now || instance.review->reviewing_ahead())
+            ? (due_index++ < instance.review->remaining_grades()
+                ? (instance.review->reviewing_ahead() ? "This round" : "Due") : "Next batch") : "Later";
         if (group != previous) { content_height += 25; previous = group; }
         content_height += row_height;
     }
@@ -503,8 +516,9 @@ void draw_queue(Instance& instance, NVGcontext* vg, float x, float w)
     for (size_t index = 0; index < queue.size(); ++index)
     {
         const auto& entry = queue[index];
-        const std::string group = entry.due_now
-            ? (due_index++ < instance.review->remaining_grades() ? "Due" : "Next batch") : "Later";
+        const std::string group = (entry.due_now || instance.review->reviewing_ahead())
+            ? (due_index++ < instance.review->remaining_grades()
+                ? (instance.review->reviewing_ahead() ? "This round" : "Due") : "Next batch") : "Later";
         if (group != previous)
         {
             label(vg, x + 12, y + 3, 11, group, muted);
@@ -525,13 +539,16 @@ void draw_queue(Instance& instance, NVGcontext* vg, float x, float w)
     }
     if (queue.empty()) label(vg, x + 12, top + 15, 11, "No queue available", muted);
     nvgRestore(vg);
+    instance.queue_thumb_height = 0;
     if (instance.queue_max_scroll > 0)
     {
         const float thumb = std::max(24.0f, clip_height * clip_height / content_height);
         const float sy = top + (clip_height - thumb) * instance.queue_scroll / instance.queue_max_scroll;
-        rect(vg, x + w - 7, sy, 3, thumb, nvgRGB(100, 126, 148), 2);
-        button(instance, vg, x, 608, (w - 8) / 2, "Up", "queue-up", nvgRGB(34, 55, 77));
-        button(instance, vg, x + (w + 8) / 2, 608, (w - 8) / 2, "Down", "queue-down", nvgRGB(34, 55, 77));
+        instance.queue_thumb_top = sy;
+        instance.queue_thumb_height = thumb;
+        rect(vg, x + w - 10, top, 8, clip_height, nvgRGB(34, 55, 77), 4);
+        rect(vg, x + w - 10, sy, 8, thumb,
+            instance.queue_dragging ? nvgRGB(132, 211, 192) : nvgRGB(100, 126, 148), 4);
     }
 }
 
@@ -587,7 +604,8 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
     const auto white = nvgRGB(237, 243, 250), muted = nvgRGB(153, 173, 197), ink = nvgRGB(27, 45, 66);
     rect(vg, 0, 0, width, height, nvgRGB(16, 27, 43), 0);
     label(vg, left, 21, 24, "Japanese flashcards", white);
-    label(vg, left, 59, 13, std::to_string(instance.review->due_count()) + " reviews due", muted);
+    label(vg, left, 59, 13, instance.review->reviewing_ahead()
+        ? "Extra review round" : std::to_string(instance.review->due_count()) + " reviews due", muted);
     if (instance.guide_visible)
     {
         draw_guide(instance, vg, left, panel, center * 2);
@@ -698,7 +716,14 @@ void draw(Instance& instance, NVGcontext* vg, int pixel_w, int pixel_h)
         if (const auto due = instance.review->next_due())
             next = "Next review in about " + std::to_string(std::max<int64_t>(1, (*due - flashcards::unix_now() + 59) / 60)) + " minutes.";
         paragraph(vg, left + 40, 310, panel - 80, 18, next, muted);
-        button(instance, vg, left, 542, panel, "Check due reviews", "refresh", nvgRGB(57, 88, 143));
+        if (!instance.review->blocked() && instance.review->deck_size() > 0)
+        {
+            const float half = (panel - 16) / 2;
+            button(instance, vg, left, 542, half, "Check due reviews", "refresh", nvgRGB(34, 55, 77));
+            button(instance, vg, left + half + 16, 542, half, "Review again", "review-again", nvgRGB(57, 88, 143));
+            paragraph(vg, left, 603, panel, 12, "Review again starts now. Your Again / Remembered choices still count.", muted);
+        }
+        else button(instance, vg, left, 542, panel, "Check due reviews", "refresh", nvgRGB(57, 88, 143));
     }
     if (!instance.review->error().empty())
         paragraph(vg, left, height - 40, panel, 10, instance.review->error(), nvgRGB(255, 197, 121));
@@ -849,6 +874,7 @@ void quiesce(void* opaque)
 {
     auto& i = *static_cast<Instance*>(opaque);
     i.quiesced = true;
+    cancel_pointer(i);
     stop_audio(i);
 }
 void destroy(void* opaque) { delete static_cast<Instance*>(opaque); }
@@ -858,6 +884,7 @@ void viewport(void* opaque, const DraxulPluginViewportV2* value)
     {
         auto& i = *static_cast<Instance*>(opaque);
         i.viewport = *value;
+        cancel_pointer(i);
         i.hits.clear();
         changed(i);
     }
@@ -866,7 +893,7 @@ void visible(void* opaque, int32_t value)
 {
     auto& i = *static_cast<Instance*>(opaque);
     i.visible = value != 0;
-    if (!i.visible) { stop_audio(i); i.flipping = false; }
+    if (!i.visible) { stop_audio(i); i.flipping = false; cancel_pointer(i); }
     if (i.visible) { i.review->refresh(); i.services.request_tick(); }
     changed(i);
 }
@@ -874,7 +901,7 @@ void focused(void* opaque, int32_t value)
 {
     auto& i = *static_cast<Instance*>(opaque);
     i.focused = value != 0;
-    i.held_keys.clear(); i.mouse_down = false;
+    i.held_keys.clear(); cancel_pointer(i);
 }
 int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
 {
@@ -907,6 +934,23 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
     if (event->kind == DRAXUL_PLUGIN_INPUT_POINTER_BUTTON && event->button == 1)
     {
         const float x = event->x / i.scale, y = event->y / i.scale;
+        if (event->pressed && !i.mouse_down && !i.guide_visible && i.queue_max_scroll > 0
+            && x >= i.queue_left + i.queue_width - 14 && x < i.queue_left + i.queue_width
+            && y >= queue_top && y < queue_top + queue_height)
+        {
+            i.mouse_down = i.queue_dragging = true;
+            i.pressed_action.clear();
+            i.queue_drag_offset = y >= i.queue_thumb_top && y < i.queue_thumb_top + i.queue_thumb_height
+                ? y - i.queue_thumb_top : i.queue_thumb_height / 2;
+            drag_queue(i, y);
+            return 1;
+        }
+        if (!event->pressed && i.queue_dragging)
+        {
+            drag_queue(i, y);
+            cancel_pointer(i);
+            return 1;
+        }
         std::string action;
         for (const auto& hit : i.hits)
             if (x >= hit.x && x < hit.x + hit.w && y >= hit.y && y < hit.y + hit.h)
@@ -924,10 +968,24 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
         }
         return 1;
     }
+    if (event->kind == DRAXUL_PLUGIN_INPUT_POINTER_MOVE)
+    {
+        if ((event->buttons & 1) == 0)
+        {
+            if (i.mouse_down) { cancel_pointer(i); changed(i); }
+        }
+        else if (i.queue_dragging)
+        {
+            drag_queue(i, event->y / i.scale);
+            return 1;
+        }
+    }
     if (event->kind == DRAXUL_PLUGIN_INPUT_WHEEL && !i.guide_visible)
     {
         const float x = event->x / i.scale;
-        if (x >= i.queue_left && x < i.queue_left + i.queue_width)
+        const float y = event->y / i.scale;
+        if (x >= i.queue_left && x < i.queue_left + i.queue_width
+            && y >= queue_top && y < queue_top + queue_height)
         {
             i.queue_scroll = std::clamp(i.queue_scroll - event->delta_y * 72.0f,
                 0.0f, i.queue_max_scroll);
@@ -936,7 +994,7 @@ int32_t input(void* opaque, const DraxulPluginInputEventV2* event)
     }
     if (event->kind == DRAXUL_PLUGIN_INPUT_FOCUS && !event->pressed)
     {
-        i.held_keys.clear(); i.mouse_down = false;
+        i.held_keys.clear(); cancel_pointer(i);
     }
     return 0;
 }
@@ -982,7 +1040,7 @@ int32_t presentation(void* opaque, DraxulPluginPresentationStateV2* state)
 {
     auto& i = *static_cast<Instance*>(opaque);
     if (!state || state->struct_size < sizeof(*state)) return 0;
-    i.status = std::to_string(i.review->due_count()) + " due";
+    i.status = i.review->reviewing_ahead() ? "Extra review round" : std::to_string(i.review->due_count()) + " due";
     *state = {};
     state->struct_size = sizeof(*state);
     state->display_name = { "Flashcards", 10 };
@@ -998,7 +1056,7 @@ int32_t dispatch(void* opaque, const char* id, size_t length)
         return 0;
     const auto action = std::string_view(id, length);
     if (action != "flip" && action != "replay" && action != "remembered"
-        && action != "again" && action != "refresh" && action != "skip"
+        && action != "again" && action != "refresh" && action != "review-again" && action != "skip"
         && action != "help" && action != "close-guide" && action != "another-speaker")
         return 0;
     act(*static_cast<Instance*>(opaque), std::string_view(id, length));
@@ -1007,7 +1065,8 @@ int32_t dispatch(void* opaque, const char* id, size_t length)
 constexpr AdapterAction actions[] = {
     { "flip", "Reveal flashcard" }, { "replay", "Replay pronunciation" },
     { "remembered", "Remembered" }, { "again", "Again" }, { "skip", "Skip flashcard" },
-    { "refresh", "Check due reviews" }, { "help", "Explain card cues" }, { "close-guide", "Continue to reviews" },
+    { "refresh", "Check due reviews" }, { "review-again", "Review again now" },
+    { "help", "Explain card cues" }, { "close-guide", "Continue to reviews" },
     { "another-speaker", "Hear another speaker" }
 };
 using Presentation = PresentationAdapter<actions, presentation, dispatch>;

@@ -46,11 +46,18 @@ that directional priority. Events or bootstrap creation over five minutes ahead
 are rejected until the local clock catches up; accurate clocks matter.
 
 Both directions use the latest reconstructed grade plus ten minutes as their
-shared word cooldown. Only eligible due cards compete for selection; future
-reviews are never pulled forward. A revealed answer remains visible as peer
+shared word cooldown. Normal scheduled selection only includes eligible due cards;
+future reviews are never pulled forward automatically. The explicit Review again
+button starts an immediate round across the deck, including cooling-down and
+future cards, once per direction and at most twenty grades. Its explicit outcomes
+use the same durable event/score path; merely starting it creates no events and
+does not reset progress. Reopening or Check due reviews restores normal scheduling.
+A revealed answer remains visible as peer
 state arrives. Grading rereads full directional progress and shared cooldown
 under the process lock. A changed schedule rejects the stale grade and selects
-the next eligible card.
+the next eligible card. An additional round bypasses time eligibility while
+checking saved progress in both directions for a peer change; stale grades remain
+rejected. The override is local session state and is never exported as a grade.
 
 ## Durability, bounds and freshness
 
