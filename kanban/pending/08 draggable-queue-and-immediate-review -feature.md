@@ -46,3 +46,80 @@ across the aggregate and cue rerun. Debug Flashcards startup passed in 20.08 s;
 Release build/startup passed (94.50 s build). Standard Debug host smoke again
 timed out at 30 s; this inherited host issue stays with Draxul card 65.
 Costs and platform limitations are in [validation.md](../../docs/validation.md).
+
+## Windows gate preparation, 2026-10-08
+
+Read-only inspection confirmed the existing Ninja Debug registration selects
+exactly one `draxul-render-flashcards-queue` test. It launches
+`plugins/flashcards/tests/queue_smoke.py` against the same-cache `draxul.exe`,
+using the configured vocabulary source and isolated temporary recall state.
+The shared native helper is `plugins/flashcards/tests/render_smoke.py`; there is
+no root `tests/render_smoke.py`. No harness change is justified by inspection
+alone, and no assertions have been removed or weakened.
+
+After the parent grants the exclusive GPU/native-pointer slot, run from the
+Draxul checkout without configuring or building:
+
+```powershell
+ctest --test-dir D:/dev/Draxul/build-ninja-debug --parallel 1 --no-tests=error --output-on-failure -R '^draxul-render-flashcards-queue$' --output-log D:/dev/Draxul/build-ninja-debug/flashcards-queue-gate.log
+```
+
+The existing gate exercises 900x760 and 620x720 native Windows input, narrow
+drag/bottom-track endpoint equality, normal drag/return-to-top and track clicks,
+byte-identical recall during preview/reveal/scroll/start, unchanged cue-only
+previews on reveal, and exactly one explicit immediate-round grade within the
+shared cooldown without changing unrelated directions. Inspect the resulting
+normal/narrow fronts/backs, scroll/reset/track endpoints, completed narrow face,
+Review again front and repeated-grade capture under
+`build-ninja-debug/flashcards-queue/` before checking the remaining gate.
+
+CTest's GPU resource lock does not coordinate separate CTest processes: parent
+scheduling and an idle desktop pointer remain required. Preparation ran only
+CTest discovery (`-N -V`, one registered test, no execution); no build, native
+input, smoke or render pass has run in this follow-up. The parent owns the
+current aggregate/build and shared startup gates. Keep this card pending until
+the scheduled native run and capture inspection actually pass.
+
+## Exclusive Windows gate result, 2026-10-08
+
+After the parent explicitly granted the GPU/pointer slot and reported other
+clients/servers closed and Release compilation finished, the command above ran
+once with unchanged assertions and the existing 180-second CTest bound. It
+failed in 50.15 s (50.18 s total CTest), at the first narrow drag:
+
+```text
+render_smoke.py:141
+RuntimeError: Desktop pointer moved during the synthetic drag; rerun with the mouse idle
+```
+
+This establishes that the helper's observed desktop cursor differed from its
+saved drag origin; it does not establish who moved it or prove a product defect.
+No retry-to-green, rebuild, native diagnostic rerun, weakened assertion or
+production/harness modification was made. The failed child's cleanup completed;
+a process query found no `draxul.exe` or `draxul-server.exe`, and the exclusive
+slot was released immediately before further capture inspection/documentation.
+
+Four fresh captures were inspected at their exact sizes: normal front/back
+(900x760) and narrow front/back (620x720). The image-only queue stays visually
+unchanged on reveal, the main answer/controls fit, and neither front is the
+unexpected Help face from earlier failures. The run passed byte-identical recall
+checks for both layouts and the normal cue-column pixel equality check before
+failing during `queue-narrow-scroll`. That drag produced no new bitmap. Narrow
+endpoint equality, normal drag/return/track, immediate-round start and explicit
+repeat grading were not reached, so the remaining checkbox stays unchecked.
+
+Evidence is retained in `build-ninja-debug/flashcards-queue-gate.log` and
+`build-ninja-debug/flashcards-queue/queue-narrow-scroll.log`. The four inspected
+BMPs also have `-gate.png` inspection copies beside them. Other endpoint/repeat
+artifacts dated 2026-10-06 are stale and are not evidence for this attempt.
+The screenshots show CPU indicators between 63% and 100%; this is an observation,
+not a diagnosed cause of the pointer failure. PNG inspection used Windows
+System.Drawing after the default Python lacked Pillow; no dependencies installed.
+
+Parent-reported shared validation: behavior aggregate 73/79, all three Flashcards
+behavior suites passed, isolated same-cache Debug startup passed, and five
+renderer screenshots passed. Standard default-profile startup still failed and
+remains owned by Draxul `65 windows-validation-timing -test.md`. These reports do
+not replace the failed native queue gate. This follow-up performed no configure,
+compilation, aggregate rerun, smoke rerun, Release run or remote CI. Only this
+card changed; no commits were created.
