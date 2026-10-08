@@ -4,6 +4,8 @@ Found while validating a local Flashcards rebuild against the Dropbox vocabulary
 on 2026-10-07. This is separate from the build-source configuration issue; no
 review-reader implementation was changed during that task.
 
+**Priority:** P1 — conflicting review records can be accepted depending on directory order
+
 - [ ] Reproduce and correct conflict handling independently of directory iteration order.
 - [ ] Cover overlapping event-ID and producer-sequence conflicts in both input orders.
 - [ ] Run the Flashcards aggregate and same-cache startup checks.

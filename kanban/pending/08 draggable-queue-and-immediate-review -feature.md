@@ -4,6 +4,8 @@ Remove the redundant Up/Down buttons and let the user drag the queue scrollbar.
 Allow an explicit additional review round without waiting for the automatic
 schedule or shared word cooldown. Ordinary scheduled reviews retain their rules.
 
+**Priority:** P2
+
 - [x] Implement thumb dragging, track clicks, release/cancellation and wheel scrolling.
 - [x] Add Review again with a bounded round, explicit persisted grades and stale-grade protection.
 - [ ] Exercise real normal/narrow pointer input and immediate repeat reviews; inspect renders.

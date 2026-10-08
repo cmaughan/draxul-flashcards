@@ -4,6 +4,8 @@ Prefer licensed natural human recordings for every new entry, ideally 2–3
 distinct native Japanese speakers where suitable recordings are available. This
 is the user's explicit preference on 2026-10-02, including the six current entries.
 
+**Priority:** P2
+
 - [x] Checkpoint the six-entry cue slice and fix its capture barriers.
 - [x] Curate available exact recordings with file-level licences and stated speaker information.
 - [x] Record per-entry coverage, edits, signal checks and quality limitations honestly.
